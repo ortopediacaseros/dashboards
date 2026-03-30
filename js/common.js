@@ -1,7 +1,7 @@
 import { supabase, formatMoney } from './supabase.js';
 
 // ── Settings ──────────────────────────────────────────────
-const DEFAULTS = { color: '#00D4B4', colorDim: 'rgba(0,212,180,0.12)', fontSize: 15, font: 'IBM Plex Sans' };
+const DEFAULTS = { color: '#00D4B4', colorDim: 'rgba(0,212,180,0.12)', fontSize: 15, font: 'IBM Plex Sans', theme: 'dark' };
 
 const COLORES = [
   { name: 'Turquesa', color: '#00D4B4', dim: 'rgba(0,212,180,0.12)' },
@@ -38,10 +38,12 @@ function saveSetting(key, val) {
 
 function applySettings() {
   const s = getSettings();
-  document.documentElement.style.setProperty('--teal', s.color);
-  document.documentElement.style.setProperty('--teal-dim', s.colorDim);
-  document.documentElement.style.fontSize = s.fontSize + 'px';
-  document.body.style.fontFamily = `'${s.font}', sans-serif`;
+  const root = document.documentElement;
+  root.setAttribute('data-theme', s.theme);
+  root.style.setProperty('--teal', s.color);
+  root.style.setProperty('--teal-dim', s.colorDim);
+  root.style.setProperty('--font-body', `'${s.font}'`);
+  root.style.fontSize = s.fontSize + 'px';
   if (s.font !== 'IBM Plex Sans') loadFont(s.font);
 }
 
@@ -155,6 +157,14 @@ function injectSettingsPanel() {
     </div>
 
     <div class="settings-section">
+      <div class="settings-label">Tema</div>
+      <div style="display:flex;gap:8px">
+        <button class="settings-opt ${s.theme === 'dark' ? 'active' : ''}" data-theme-val="dark" style="flex:1;text-align:center">🌙 Oscuro</button>
+        <button class="settings-opt ${s.theme === 'light' ? 'active' : ''}" data-theme-val="light" style="flex:1;text-align:center">☀️ Claro</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
       <div class="settings-label">Color de acento</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${COLORES.map(c => `
@@ -189,7 +199,7 @@ function injectSettingsPanel() {
     </div>
 
     <div class="settings-section">
-      <button class="btn btn-danger" id="settings-reset" style="width:100%;font-size:13px">
+      <button class="btn btn-danger" id="settings-reset" style="width:100%;font-size:0.867rem">
         ↺ Restaurar por defecto
       </button>
     </div>`;
@@ -210,6 +220,16 @@ function injectSettingsPanel() {
       panel.classList.remove('open');
       btn.innerHTML = '⚙️';
     }
+  });
+
+  // Tema
+  panel.querySelectorAll('[data-theme-val]').forEach(el => {
+    el.addEventListener('click', () => {
+      panel.querySelectorAll('[data-theme-val]').forEach(e => e.classList.remove('active'));
+      el.classList.add('active');
+      saveSetting('theme', el.dataset.themeVal);
+      applySettings();
+    });
   });
 
   // Colores
