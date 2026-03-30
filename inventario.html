@@ -5,6 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inventario — Ortopedia Caseros</title>
   <link rel="stylesheet" href="css/styles.css">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    .bulk-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px; }
+    .bulk-tab {
+      padding:10px 20px; cursor:pointer; font-size:13px; font-weight:500;
+      color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-1px;
+      background:none; border-top:none; border-left:none; border-right:none;
+      font-family:'IBM Plex Sans',sans-serif;
+    }
+    .bulk-tab.active { color:var(--teal); border-bottom-color:var(--teal); }
+    .bulk-panel { display:none; }
+    .bulk-panel.active { display:block; }
+    .csv-drop {
+      border:2px dashed var(--border-strong); border-radius:var(--radius);
+      padding:32px 20px; text-align:center; cursor:pointer;
+      transition:border-color 0.2s, background 0.2s;
+    }
+    .csv-drop:hover, .csv-drop.dragover { border-color:var(--teal); background:var(--teal-dim); }
+    .scan-counter {
+      text-align:center; padding:12px;
+      font-family:'Syne',sans-serif; font-size:22px; font-weight:700; color:var(--teal);
+    }
+    .scan-counter span { font-size:13px; color:var(--text-muted); font-family:'IBM Plex Sans',sans-serif; font-weight:400; display:block; }
+  </style>
 </head>
 <body>
   <button class="hamburger" id="hamburger">☰</button>
@@ -28,7 +52,10 @@
           <h1>📦 Inventario</h1>
           <p>Stock completo de productos</p>
         </div>
-        <button class="btn btn-primary" id="btn-agregar">+ Agregar producto</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-secondary" id="btn-carga-masiva">📥 Carga masiva</button>
+          <button class="btn btn-primary" id="btn-agregar">+ Agregar producto</button>
+        </div>
       </div>
 
       <div class="kpi-grid">
@@ -208,6 +235,85 @@
         </div>
         <button type="submit" class="btn btn-primary btn-full">Guardar producto</button>
       </form>
+    </div>
+  </div>
+
+  <!-- Modal carga masiva -->
+  <div class="modal-overlay hidden" id="modal-carga-masiva">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-header">
+        <div class="modal-title">📥 Carga masiva de productos</div>
+        <button class="modal-close" id="btn-cerrar-masiva">✕</button>
+      </div>
+
+      <div class="bulk-tabs">
+        <button class="bulk-tab active" data-tab="scan">📷 Escaneo rápido</button>
+        <button class="bulk-tab" data-tab="csv">📋 Importar CSV</button>
+      </div>
+
+      <!-- Panel escaneo -->
+      <div class="bulk-panel active" id="panel-scan">
+        <div class="scan-counter" id="scan-counter">0 <span>productos cargados en esta sesión</span></div>
+        <div id="scan-bulk-container" style="border-radius:var(--radius);overflow:hidden;background:#000;margin-bottom:14px;display:none"></div>
+        <button class="btn btn-secondary btn-full" id="btn-iniciar-scan-bulk" style="margin-bottom:14px">📷 Iniciar escáner</button>
+
+        <div id="bulk-scan-form" style="display:none">
+          <div style="background:var(--teal-dim);border:1px solid rgba(0,212,180,0.2);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:13px">
+            EAN detectado: <strong id="bulk-ean-detectado"></strong>
+          </div>
+          <div class="form-group">
+            <label>Nombre *</label>
+            <input type="text" class="input" id="bulk-nombre" required placeholder="Ej: Muleta aluminio talle M">
+          </div>
+          <div class="form-group">
+            <label>Categoría *</label>
+            <input type="text" class="input" id="bulk-categoria" required placeholder="Ej: Muletas">
+            <div id="bulk-cat-sugerencias" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Precio venta *</label>
+              <input type="number" class="input" id="bulk-precio-venta" min="0" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label>Precio costo</label>
+              <input type="number" class="input" id="bulk-precio-costo" min="0" step="0.01" placeholder="0.00">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Stock inicial</label>
+              <input type="number" class="input" id="bulk-stock" min="0" value="1">
+            </div>
+            <div class="form-group">
+              <label>Stock mínimo</label>
+              <input type="number" class="input" id="bulk-stock-min" min="0" value="5">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-primary" style="flex:1" id="btn-guardar-bulk">💾 Guardar y seguir</button>
+            <button class="btn btn-secondary" id="btn-skip-bulk">Saltear</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel CSV -->
+      <div class="bulk-panel" id="panel-csv">
+        <div class="csv-drop" id="csv-drop-zone">
+          <div style="font-size:32px;margin-bottom:8px">📋</div>
+          <strong>Arrastrá el CSV aquí</strong>
+          <p style="color:var(--text-muted);font-size:12px;margin-top:6px">o hacé clic para seleccionar</p>
+          <input type="file" id="csv-input" accept=".csv" style="display:none">
+        </div>
+        <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--text-dim)">Columnas: nombre, ean, categoria, precio_venta, precio_costo, stock_actual, stock_minimo</span>
+          <button class="btn btn-secondary" id="btn-descargar-template" style="padding:5px 10px;font-size:12px">⬇ Template</button>
+        </div>
+        <div id="csv-preview" style="margin-top:14px"></div>
+        <button class="btn btn-primary btn-full" id="btn-importar-csv" style="margin-top:14px;display:none">
+          ✅ Importar productos
+        </button>
+      </div>
     </div>
   </div>
 

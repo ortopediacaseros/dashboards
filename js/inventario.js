@@ -281,3 +281,284 @@ document.getElementById('form-nuevo-inventario').addEventListener('submit', asyn
 });
 
 init();
+
+// ══════════════════════════════════════════════════════════
+// CARGA MASIVA
+// ══════════════════════════════════════════════════════════
+
+let bulkScanner = null;
+let bulkCount = 0;
+let csvData = [];
+
+// Abrir / cerrar modal
+document.getElementById('btn-carga-masiva').addEventListener('click', () => {
+  bulkCount = 0;
+  actualizarContador();
+  document.getElementById('modal-carga-masiva').classList.remove('hidden');
+});
+
+document.getElementById('btn-cerrar-masiva').addEventListener('click', cerrarMasiva);
+document.getElementById('modal-carga-masiva').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-carga-masiva')) cerrarMasiva();
+});
+
+async function cerrarMasiva() {
+  await detenerScanBulk();
+  document.getElementById('modal-carga-masiva').classList.add('hidden');
+  document.getElementById('bulk-scan-form').style.display = 'none';
+  document.getElementById('btn-iniciar-scan-bulk').style.display = '';
+  if (bulkCount > 0) cargarProductos();
+}
+
+// Tabs
+document.querySelectorAll('.bulk-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.bulk-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.bulk-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Escaneo rápido ───────────────────────────────────────
+
+function actualizarContador() {
+  document.getElementById('scan-counter').innerHTML =
+    `${bulkCount} <span>producto${bulkCount !== 1 ? 's' : ''} cargado${bulkCount !== 1 ? 's' : ''} en esta sesión</span>`;
+}
+
+document.getElementById('btn-iniciar-scan-bulk').addEventListener('click', async () => {
+  const container = document.getElementById('scan-bulk-container');
+  container.style.display = '';
+  document.getElementById('btn-iniciar-scan-bulk').style.display = 'none';
+
+  bulkScanner = new Html5Qrcode('scan-bulk-container');
+  try {
+    await bulkScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 160 } },
+      onBulkEAN,
+      () => {}
+    );
+  } catch (err) {
+    showToast('Error al acceder a la cámara: ' + err.message, 'error');
+    container.style.display = 'none';
+    document.getElementById('btn-iniciar-scan-bulk').style.display = '';
+  }
+});
+
+async function detenerScanBulk() {
+  if (bulkScanner) {
+    try { await bulkScanner.stop(); bulkScanner.clear(); } catch (e) {}
+    bulkScanner = null;
+  }
+  document.getElementById('scan-bulk-container').style.display = 'none';
+}
+
+async function onBulkEAN(ean) {
+  await detenerScanBulk();
+
+  // Verificar si ya existe
+  const { data } = await supabase.from('productos').select('id,nombre').eq('ean', ean).maybeSingle();
+  if (data) {
+    showToast(`Ya existe: ${data.nombre}`, 'warning', 2500);
+    reiniciarScanBulk();
+    return;
+  }
+
+  // Mostrar form
+  document.getElementById('bulk-ean-detectado').textContent = ean;
+  document.getElementById('bulk-nombre').value = '';
+  document.getElementById('bulk-categoria').value = '';
+  document.getElementById('bulk-precio-venta').value = '';
+  document.getElementById('bulk-precio-costo').value = '';
+  document.getElementById('bulk-stock').value = '1';
+  document.getElementById('bulk-stock-min').value = '5';
+  document.getElementById('bulk-scan-form').style.display = '';
+
+  // Sugerencias de categorías existentes
+  const cats = [...new Set(todosProductos.map(p => p.categoria))].sort().slice(0, 8);
+  document.getElementById('bulk-cat-sugerencias').innerHTML = cats.map(c =>
+    `<button type="button" class="btn btn-secondary" style="padding:3px 10px;font-size:11px"
+      onclick="document.getElementById('bulk-categoria').value='${c}'">${c}</button>`
+  ).join('');
+
+  setTimeout(() => document.getElementById('bulk-nombre').focus(), 100);
+}
+
+document.getElementById('btn-guardar-bulk').addEventListener('click', async () => {
+  const nombre = document.getElementById('bulk-nombre').value.trim();
+  const categoria = document.getElementById('bulk-categoria').value.trim();
+  const precio_venta = parseFloat(document.getElementById('bulk-precio-venta').value);
+  const ean = document.getElementById('bulk-ean-detectado').textContent;
+
+  if (!nombre || !categoria || !precio_venta) {
+    showToast('Nombre, categoría y precio venta son obligatorios', 'warning');
+    return;
+  }
+
+  const btn = document.getElementById('btn-guardar-bulk');
+  btn.disabled = true;
+
+  const { error } = await supabase.from('productos').insert({
+    ean,
+    sku: `EAN-${ean}`,
+    nombre,
+    categoria,
+    precio_venta,
+    precio_costo: parseFloat(document.getElementById('bulk-precio-costo').value) || 0,
+    stock_actual: parseInt(document.getElementById('bulk-stock').value) || 1,
+    stock_minimo: parseInt(document.getElementById('bulk-stock-min').value) || 5,
+  });
+
+  btn.disabled = false;
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  bulkCount++;
+  actualizarContador();
+  showToast(`${nombre} guardado`, 'success', 1500);
+  reiniciarScanBulk();
+});
+
+document.getElementById('btn-skip-bulk').addEventListener('click', reiniciarScanBulk);
+
+async function reiniciarScanBulk() {
+  document.getElementById('bulk-scan-form').style.display = 'none';
+  document.getElementById('btn-iniciar-scan-bulk').style.display = '';
+  document.getElementById('scan-bulk-container').style.display = 'none';
+
+  // Reiniciar escáner automáticamente
+  const container = document.getElementById('scan-bulk-container');
+  container.style.display = '';
+  document.getElementById('btn-iniciar-scan-bulk').style.display = 'none';
+  bulkScanner = new Html5Qrcode('scan-bulk-container');
+  try {
+    await bulkScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 160 } },
+      onBulkEAN,
+      () => {}
+    );
+  } catch (err) {
+    container.style.display = 'none';
+    document.getElementById('btn-iniciar-scan-bulk').style.display = '';
+  }
+}
+
+// ── Importar CSV ─────────────────────────────────────────
+
+const csvDrop = document.getElementById('csv-drop-zone');
+const csvInput = document.getElementById('csv-input');
+
+csvDrop.addEventListener('click', () => csvInput.click());
+csvDrop.addEventListener('dragover', e => { e.preventDefault(); csvDrop.classList.add('dragover'); });
+csvDrop.addEventListener('dragleave', () => csvDrop.classList.remove('dragover'));
+csvDrop.addEventListener('drop', e => {
+  e.preventDefault(); csvDrop.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) procesarCSV(e.dataTransfer.files[0]);
+});
+csvInput.addEventListener('change', () => { if (csvInput.files[0]) procesarCSV(csvInput.files[0]); });
+
+function procesarCSV(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.split('\n').map(l => l.trim()).filter(l => l);
+    if (lines.length < 2) { showToast('El CSV está vacío o solo tiene encabezado', 'warning'); return; }
+
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const required = ['nombre', 'precio_venta', 'categoria'];
+    const missing = required.filter(r => !headers.includes(r));
+    if (missing.length) {
+      showToast(`Faltan columnas: ${missing.join(', ')}`, 'error');
+      return;
+    }
+
+    csvData = lines.slice(1).map(line => {
+      const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+      const obj = {};
+      headers.forEach((h, i) => obj[h] = vals[i] || '');
+      return obj;
+    }).filter(r => r.nombre);
+
+    renderCSVPreview();
+  };
+  reader.readAsText(file);
+}
+
+function renderCSVPreview() {
+  const el = document.getElementById('csv-preview');
+  const btn = document.getElementById('btn-importar-csv');
+
+  if (csvData.length === 0) {
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No se encontraron filas válidas</p>';
+    btn.style.display = 'none';
+    return;
+  }
+
+  const preview = csvData.slice(0, 5);
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${csvData.length} productos encontrados — preview de los primeros ${Math.min(5, csvData.length)}:</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nombre</th><th>Categoría</th><th>EAN</th><th>P.Venta</th></tr></thead>
+        <tbody>
+          ${preview.map(r => `<tr>
+            <td>${r.nombre}</td>
+            <td>${r.categoria || '—'}</td>
+            <td style="color:var(--text-dim)">${r.ean || '—'}</td>
+            <td>${r.precio_venta ? '$' + r.precio_venta : '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  btn.style.display = '';
+  btn.textContent = `✅ Importar ${csvData.length} productos`;
+}
+
+document.getElementById('btn-importar-csv').addEventListener('click', async () => {
+  if (!csvData.length) return;
+  const btn = document.getElementById('btn-importar-csv');
+  btn.disabled = true;
+  btn.textContent = 'Importando...';
+
+  let ok = 0, skip = 0, err = 0;
+
+  for (const row of csvData) {
+    const ean = row.ean?.trim() || null;
+    const sku = ean ? `EAN-${ean}` : `SKU-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    const producto = {
+      ean,
+      sku,
+      nombre: row.nombre,
+      categoria: row.categoria || 'General',
+      precio_venta: parseFloat(row.precio_venta) || 0,
+      precio_costo: parseFloat(row.precio_costo) || 0,
+      stock_actual: parseInt(row.stock_actual) || 0,
+      stock_minimo: parseInt(row.stock_minimo) || 5,
+    };
+    const { error } = await supabase.from('productos').insert(producto);
+    if (error) {
+      if (error.message?.includes('unique') || error.code === '23505') skip++;
+      else err++;
+    } else ok++;
+  }
+
+  btn.disabled = false;
+  showToast(`${ok} importados${skip ? `, ${skip} ya existían` : ''}${err ? `, ${err} errores` : ''}`,
+    err > 0 ? 'warning' : 'success', 5000);
+
+  csvData = [];
+  document.getElementById('csv-preview').innerHTML = '';
+  btn.style.display = 'none';
+  cerrarMasiva();
+});
+
+document.getElementById('btn-descargar-template').addEventListener('click', () => {
+  const csv = 'nombre,ean,categoria,precio_venta,precio_costo,stock_actual,stock_minimo\nMulteta aluminio M,7891234567890,Muletas,15000,8000,10,3\nRodillera talle M,,Rodilleras,8500,4500,5,2';
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'template_productos.csv';
+  a.click();
+});
