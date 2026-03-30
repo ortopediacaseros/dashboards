@@ -460,13 +460,29 @@ csvDrop.addEventListener('drop', e => {
 });
 csvInput.addEventListener('change', () => { if (csvInput.files[0]) procesarCSV(csvInput.files[0]); });
 
+function parseCSVLine(line) {
+  const vals = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (ch === ',' && !inQ) {
+      vals.push(cur.trim()); cur = '';
+    } else cur += ch;
+  }
+  vals.push(cur.trim());
+  return vals;
+}
+
 function procesarCSV(file) {
   const reader = new FileReader();
   reader.onload = e => {
     const lines = e.target.result.split('\n').map(l => l.trim()).filter(l => l);
     if (lines.length < 2) { showToast('El CSV está vacío o solo tiene encabezado', 'warning'); return; }
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
     const required = ['nombre', 'precio_venta', 'categoria'];
     const missing = required.filter(r => !headers.includes(r));
     if (missing.length) {
@@ -475,7 +491,7 @@ function procesarCSV(file) {
     }
 
     csvData = lines.slice(1).map(line => {
-      const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+      const vals = parseCSVLine(line);
       const obj = {};
       headers.forEach((h, i) => obj[h] = vals[i] || '');
       return obj;
@@ -526,7 +542,7 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
 
   for (const row of csvData) {
     const ean = row.ean?.trim() || null;
-    const sku = ean ? `EAN-${ean}` : `SKU-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    const sku = row.sku?.trim() || (ean ? `EAN-${ean}` : `SKU-${Date.now()}-${Math.random().toString(36).slice(2,6)}`);
     const producto = {
       ean,
       sku,
