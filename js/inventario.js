@@ -584,19 +584,22 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
       stock_actual: parseInt(row.stock_actual) || 0,
       stock_minimo: parseInt(row.stock_minimo) || 5,
     };
-    const { error } = await supabase.from('productos').insert(producto);
+    let error;
+    if (ean) {
+      // Con EAN: upsert — actualiza si ya existe, inserta si no
+      ({ error } = await supabase.from('productos').upsert(producto, { onConflict: 'ean' }));
+    } else {
+      // Sin EAN: insert simple
+      ({ error } = await supabase.from('productos').insert(producto));
+    }
     if (error) {
-      if (error.message?.includes('unique') || error.code === '23505') {
-        skip++;
-      } else {
-        errores.push({ nombre: row.nombre, motivo: error.message || error.code });
-      }
+      errores.push({ nombre: row.nombre, motivo: error.message || error.code });
     } else ok++;
   }
 
   btn.disabled = false;
   showToast(
-    `${ok} importados${skip ? `, ${skip} ya existían` : ''}${errores.length ? `, ${errores.length} errores` : ''}`,
+    `${ok} importados/actualizados${errores.length ? ` · ${errores.length} errores` : ''}`,
     errores.length > 0 ? 'warning' : 'success', 6000
   );
 
@@ -604,7 +607,7 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
   previewEl.innerHTML = `
     <div style="margin-bottom:10px;font-size:0.867rem">
       <span style="color:var(--green)">✅ ${ok} importados</span>
-      ${skip ? `&nbsp;·&nbsp;<span style="color:var(--text-muted)">⏭ ${skip} ya existían (saltados)</span>` : ''}
+      ${skip ? `&nbsp;·&nbsp;<span style="color:var(--text-muted)">⏭ ${skip} saltados</span>` : ''}
       ${errores.length ? `&nbsp;·&nbsp;<span style="color:var(--red)">❌ ${errores.length} fallaron</span>` : ''}
     </div>
     ${errores.length ? `

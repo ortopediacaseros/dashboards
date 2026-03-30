@@ -109,11 +109,11 @@ async function runSearch(q, resultsEl) {
 
   if (error || !data || !data.length) {
     resultsEl.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted)">Sin resultados</div>';
-    resultsEl.style.display = '';
+    resultsEl.style.display = 'block';
     return;
   }
 
-  resultsEl.style.display = '';
+  resultsEl.style.display = 'block';
   resultsEl.innerHTML = data.map(p => {
     const margen = p.precio_costo > 0
       ? Math.round(((p.precio_venta - p.precio_costo) / p.precio_venta) * 100)
