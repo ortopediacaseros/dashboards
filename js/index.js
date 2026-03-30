@@ -1,6 +1,10 @@
 import { supabase, formatMoney } from './supabase.js';
+import { checkAuth } from './auth.js';
 
 async function init() {
+  const session = await checkAuth();
+  if (!session) return;
+
   await Promise.all([
     cargarKPIs(),
     cargarStockCritico(),

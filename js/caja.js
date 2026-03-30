@@ -1,8 +1,12 @@
 import { supabase, getCajaHoy, abrirCaja, cerrarCaja, formatMoney, formatDate, showToast } from './supabase.js';
+import { checkAuth } from './auth.js';
 
 let cajaActual = null;
 
 async function init() {
+  const session = await checkAuth();
+  if (!session) return;
+
   await cargarCaja();
   await cargarHistorial();
 }

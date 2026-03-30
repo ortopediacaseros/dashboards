@@ -1,4 +1,5 @@
 import { supabase, formatMoney, showToast } from './supabase.js';
+import { checkAuth } from './auth.js';
 
 let todosProductos = [];
 let filtroCategoria = '';
@@ -6,6 +7,9 @@ let filtroStock = '';
 let filtroTexto = '';
 
 async function init() {
+  const session = await checkAuth();
+  if (!session) return;
+
   await cargarProductos();
 
   // Realtime

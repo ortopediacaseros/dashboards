@@ -1,9 +1,13 @@
 import { supabase, formatMoney, showToast, formatDate } from './supabase.js';
+import { checkAuth } from './auth.js';
 
 let archivoSeleccionado = null;
 let facturaActualId = null;
 
 async function init() {
+  const session = await checkAuth();
+  if (!session) return;
+
   await cargarFacturas();
   setupDropZone();
 }

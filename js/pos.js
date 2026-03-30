@@ -1,5 +1,6 @@
 import { supabase, buscarPorEAN, buscarPorTexto, registrarVenta, getCajaHoy, formatMoney, showToast } from './supabase.js';
 import { Scanner } from './scanner.js';
+import { checkAuth } from './auth.js';
 
 let carrito = [];
 let scanner = null;
@@ -21,6 +22,9 @@ const formNuevo = document.getElementById('form-nuevo-producto');
 
 // ── Init ──
 async function init() {
+  const session = await checkAuth();
+  if (!session) return;
+
   const { data: caja } = await getCajaHoy();
   if (caja && caja.estado === 'abierta') {
     cajaId = caja.id;

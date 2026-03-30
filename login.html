@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ortopedia Caseros — Acceso</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg);
+    }
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 380px;
+    }
+    .login-logo {
+      font-family: 'Syne', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--teal);
+      margin-bottom: 6px;
+    }
+    .login-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+    .login-error {
+      background: var(--red-dim);
+      border: 1px solid rgba(255,91,91,0.25);
+      border-radius: var(--radius-sm);
+      color: var(--red);
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 14px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="login-logo">🦴 Ortopedia Caseros</div>
+    <div class="login-sub">Sistema de gestión interno</div>
+
+    <div class="login-error" id="login-error"></div>
+
+    <form id="form-login">
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" class="input" id="input-password"
+          placeholder="••••••••" required autofocus>
+      </div>
+      <button type="submit" class="btn btn-primary btn-full btn-lg" id="btn-login" style="margin-top:8px">
+        Ingresar
+      </button>
+    </form>
+  </div>
+
+  <script type="module" src="js/login.js"></script>
+</body>
+</html>

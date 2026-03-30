@@ -1,4 +1,5 @@
 import { supabase, formatMoney, formatDate, showToast } from './supabase.js';
+import { checkAuth } from './auth.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const tipoReporte   = document.getElementById('tipo-reporte');
@@ -18,7 +19,9 @@ const comparativa   = document.getElementById('comparativa');
 const btnExportCSV  = document.getElementById('btn-exportar-csv');
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-function init() {
+async function init() {
+  const session = await checkAuth();
+  if (!session) return;
   const hoy = new Date();
   const yyyy = hoy.getFullYear();
   const mm   = String(hoy.getMonth() + 1).padStart(2, '0');
