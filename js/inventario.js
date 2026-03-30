@@ -502,32 +502,61 @@ function procesarCSV(file) {
   reader.readAsText(file);
 }
 
+function validarCSVRow(r) {
+  const warnings = [];
+  const pv = parseFloat(r.precio_venta);
+  const pc = parseFloat(r.precio_costo);
+  const sa = parseInt(r.stock_actual);
+  if (!pv || pv <= 0) warnings.push('precio_venta vacío o cero');
+  if (pc < 0) warnings.push('precio_costo negativo');
+  if (sa > 9999) warnings.push(`stock_actual sospechoso (${sa}) — ¿se corrieron columnas?`);
+  if (r.ean && (r.ean.length < 8 || isNaN(Number(r.ean)))) warnings.push('EAN inválido');
+  return warnings;
+}
+
 function renderCSVPreview() {
   const el = document.getElementById('csv-preview');
   const btn = document.getElementById('btn-importar-csv');
 
   if (csvData.length === 0) {
-    el.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No se encontraron filas válidas</p>';
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:0.867rem">No se encontraron filas válidas</p>';
     btn.style.display = 'none';
     return;
   }
 
-  const preview = csvData.slice(0, 5);
+  const conWarnings = csvData.filter(r => validarCSVRow(r).length > 0);
+  const preview = csvData.slice(0, 8);
+
   el.innerHTML = `
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${csvData.length} productos encontrados — preview de los primeros ${Math.min(5, csvData.length)}:</div>
+    <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px">
+      ${csvData.length} productos encontrados
+      ${conWarnings.length ? `· <span style="color:var(--amber)">⚠️ ${conWarnings.length} con advertencias</span>` : '· <span style="color:var(--green)">✅ Sin problemas detectados</span>'}
+    </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Nombre</th><th>Categoría</th><th>EAN</th><th>P.Venta</th></tr></thead>
+        <thead><tr><th>Nombre</th><th>Categoría</th><th>EAN</th><th>P.Venta</th><th>P.Costo</th><th>Stock</th><th></th></tr></thead>
         <tbody>
-          ${preview.map(r => `<tr>
-            <td>${r.nombre}</td>
-            <td>${r.categoria || '—'}</td>
-            <td style="color:var(--text-dim)">${r.ean || '—'}</td>
-            <td>${r.precio_venta ? '$' + r.precio_venta : '—'}</td>
-          </tr>`).join('')}
+          ${preview.map(r => {
+            const warns = validarCSVRow(r);
+            const rowStyle = warns.length ? 'background:var(--amber-dim)' : '';
+            return `<tr style="${rowStyle}">
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nombre}</td>
+              <td>${r.categoria || '—'}</td>
+              <td style="color:var(--text-dim);font-size:0.8rem">${r.ean || '—'}</td>
+              <td style="color:var(--teal)">${r.precio_venta ? '$' + parseFloat(r.precio_venta).toLocaleString('es-AR') : '<span style="color:var(--red)">—</span>'}</td>
+              <td style="color:var(--text-muted)">${r.precio_costo ? '$' + parseFloat(r.precio_costo).toLocaleString('es-AR') : '—'}</td>
+              <td>${r.stock_actual || '0'}</td>
+              <td style="font-size:0.733rem;color:var(--amber)">${warns.join('<br>')}</td>
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
-    </div>`;
+    </div>
+    ${csvData.length > 8 ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">…y ${csvData.length - 8} más</div>` : ''}
+    ${conWarnings.length ? `<div style="margin-top:10px;padding:10px 14px;background:var(--amber-dim);border-radius:var(--radius-sm);font-size:0.867rem;color:var(--amber)">
+      ⚠️ Hay ${conWarnings.length} filas con posibles problemas de columnas. Revisá los valores antes de importar.
+    </div>` : ''}`;
+
   btn.style.display = '';
   btn.textContent = `✅ Importar ${csvData.length} productos`;
 }
@@ -535,10 +564,12 @@ function renderCSVPreview() {
 document.getElementById('btn-importar-csv').addEventListener('click', async () => {
   if (!csvData.length) return;
   const btn = document.getElementById('btn-importar-csv');
+  const previewEl = document.getElementById('csv-preview');
   btn.disabled = true;
   btn.textContent = 'Importando...';
 
-  let ok = 0, skip = 0, err = 0;
+  let ok = 0, skip = 0;
+  const errores = [];
 
   for (const row of csvData) {
     const ean = row.ean?.trim() || null;
@@ -555,19 +586,42 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
     };
     const { error } = await supabase.from('productos').insert(producto);
     if (error) {
-      if (error.message?.includes('unique') || error.code === '23505') skip++;
-      else err++;
+      if (error.message?.includes('unique') || error.code === '23505') {
+        skip++;
+      } else {
+        errores.push({ nombre: row.nombre, motivo: error.message || error.code });
+      }
     } else ok++;
   }
 
   btn.disabled = false;
-  showToast(`${ok} importados${skip ? `, ${skip} ya existían` : ''}${err ? `, ${err} errores` : ''}`,
-    err > 0 ? 'warning' : 'success', 5000);
+  showToast(
+    `${ok} importados${skip ? `, ${skip} ya existían` : ''}${errores.length ? `, ${errores.length} errores` : ''}`,
+    errores.length > 0 ? 'warning' : 'success', 6000
+  );
+
+  // Log de resultados
+  previewEl.innerHTML = `
+    <div style="margin-bottom:10px;font-size:0.867rem">
+      <span style="color:var(--green)">✅ ${ok} importados</span>
+      ${skip ? `&nbsp;·&nbsp;<span style="color:var(--text-muted)">⏭ ${skip} ya existían (saltados)</span>` : ''}
+      ${errores.length ? `&nbsp;·&nbsp;<span style="color:var(--red)">❌ ${errores.length} fallaron</span>` : ''}
+    </div>
+    ${errores.length ? `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Producto</th><th>Error</th></tr></thead>
+        <tbody>
+          ${errores.map(e => `<tr>
+            <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.nombre}</td>
+            <td style="color:var(--red);font-size:0.8rem">${e.motivo}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : ''}`;
 
   csvData = [];
-  document.getElementById('csv-preview').innerHTML = '';
   btn.style.display = 'none';
-  cerrarMasiva();
 });
 
 document.getElementById('btn-descargar-template').addEventListener('click', () => {

@@ -68,13 +68,7 @@ async function cargarKPIs() {
     document.getElementById('kpi-margen-hoy').textContent = `margen ${margen}%`;
   }
 
-  // Stock crítico count
-  const { count } = await supabase
-    .from('productos')
-    .select('id', { count: 'exact', head: true })
-    .filter('stock_actual', 'lte', 'stock_minimo');
-
-  // Workaround: Supabase no soporta filter entre columnas directamente
+  // Stock crítico count (Supabase no soporta filtro columna vs columna, se hace en JS)
   const { data: prods } = await supabase
     .from('productos')
     .select('stock_actual, stock_minimo')
