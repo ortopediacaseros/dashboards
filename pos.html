@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>POS — Ortopedia Caseros</title>
   <link rel="stylesheet" href="css/styles.css">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     .pos-layout {
       display: grid;
@@ -223,7 +224,7 @@
             </div>
 
             <div id="scanner-section" class="hidden">
-              <video id="scanner-video" autoplay muted playsinline></video>
+              <div id="scanner-video"></div>
             </div>
 
             <div id="search-section" class="hidden">

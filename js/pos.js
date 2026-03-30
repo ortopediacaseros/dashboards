@@ -31,7 +31,7 @@ async function init() {
 // ── Scanner ──
 document.getElementById('btn-escanear').addEventListener('click', async () => {
   if (scanner && scanner.active) {
-    scanner.stop();
+    await scanner.stop();
     scannerSection.classList.add('hidden');
     document.getElementById('btn-escanear').textContent = '📷 Escanear código';
     return;
@@ -49,7 +49,7 @@ document.getElementById('btn-escanear').addEventListener('click', async () => {
 });
 
 async function onCodigoEscaneado(codigo) {
-  scanner.stop();
+  await scanner.stop();
   scannerSection.classList.add('hidden');
   document.getElementById('btn-escanear').textContent = '📷 Escanear código';
   await procesarCodigo(codigo);

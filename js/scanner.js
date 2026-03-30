@@ -1,51 +1,50 @@
-import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@latest/esm/index.js';
+// Usa html5-qrcode (cargado como script global en pos.html)
+// https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js
 
 export class Scanner {
-  constructor(videoElementId, onResult) {
-    this.reader = new BrowserMultiFormatReader();
-    this.videoId = videoElementId;
+  constructor(containerId, onResult) {
+    this.containerId = containerId;
     this.onResult = onResult;
     this.active = false;
+    this._instance = null;
     this._lastCode = null;
     this._debounce = null;
   }
 
   async start() {
-    this.active = true;
-    try {
-      const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-      if (!devices || devices.length === 0) {
-        throw new Error('No se encontró cámara disponible');
-      }
-      // Preferir cámara trasera
-      const back = devices.find(d =>
-        d.label.toLowerCase().includes('back') ||
-        d.label.toLowerCase().includes('rear') ||
-        d.label.toLowerCase().includes('trasera') ||
-        d.label.toLowerCase().includes('environment')
-      );
-      const deviceId = back?.deviceId || devices[devices.length - 1]?.deviceId;
+    this._instance = new Html5Qrcode(this.containerId);
 
-      await this.reader.decodeFromVideoDevice(deviceId, this.videoId, (result, err) => {
-        if (result) {
-          const code = result.getText();
-          // Debounce: evitar múltiples disparos del mismo código
-          if (code !== this._lastCode) {
-            this._lastCode = code;
-            clearTimeout(this._debounce);
-            this._debounce = setTimeout(() => { this._lastCode = null; }, 2000);
-            this.onResult(code);
-          }
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 180 },
+      aspectRatio: 1.5,
+    };
+
+    await this._instance.start(
+      { facingMode: 'environment' },
+      config,
+      (decodedText) => {
+        // Debounce: evitar múltiples disparos del mismo código
+        if (decodedText !== this._lastCode) {
+          this._lastCode = decodedText;
+          clearTimeout(this._debounce);
+          this._debounce = setTimeout(() => { this._lastCode = null; }, 2000);
+          this.onResult(decodedText);
         }
-      });
-    } catch (err) {
-      this.active = false;
-      throw err;
-    }
+      },
+      () => { /* errores de frame ignorados */ }
+    );
+
+    this.active = true;
   }
 
-  stop() {
-    this.reader.reset();
+  async stop() {
+    if (this._instance) {
+      try {
+        await this._instance.stop();
+        this._instance.clear();
+      } catch (e) { /* ignorar si ya estaba detenido */ }
+    }
     this.active = false;
     this._lastCode = null;
   }
