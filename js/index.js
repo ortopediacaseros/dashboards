@@ -306,4 +306,52 @@ async function verificarCaja() {
   }
 }
 
+// ── Buscador rápido ──────────────────────────────────────
+let busqTimer;
+document.getElementById('buscador-rapido').addEventListener('input', e => {
+  clearTimeout(busqTimer);
+  const q = e.target.value.trim();
+  const res = document.getElementById('buscador-resultados');
+  if (!q) { res.style.display = 'none'; return; }
+  busqTimer = setTimeout(async () => {
+    const { data } = await supabase.from('productos').select('nombre,sku,ean,precio_venta,precio_costo,stock_actual,stock_minimo,categoria')
+      .eq('activo', true)
+      .or(`nombre.ilike.%${q}%,sku.ilike.%${q}%,ean.ilike.%${q}%`)
+      .order('nombre').limit(10);
+
+    if (!data || !data.length) {
+      res.style.display = '';
+      res.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-size:13px">Sin resultados</div>';
+      return;
+    }
+
+    res.style.display = '';
+    res.innerHTML = data.map(p => {
+      const margen = p.precio_costo > 0 ? Math.round(((p.precio_venta - p.precio_costo) / p.precio_venta) * 100) : null;
+      const stockClass = p.stock_actual <= p.stock_minimo ? 'stock-crit' : p.stock_actual <= p.stock_minimo * 1.5 ? 'stock-warn' : 'stock-ok';
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--border);cursor:default" class="search-item">
+          <div>
+            <div style="font-weight:500;font-size:14px">${p.nombre}</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:2px">${p.categoria} · ${p.sku}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;text-align:right">
+            <div>
+              <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:var(--teal)">${formatMoney(p.precio_venta)}</div>
+              ${margen !== null ? `<div style="font-size:11px;color:var(--text-dim)">costo ${formatMoney(p.precio_costo)} · ${margen}%</div>` : ''}
+            </div>
+            <div class="${stockClass}" style="font-size:13px;white-space:nowrap">${p.stock_actual} u.</div>
+          </div>
+        </div>`;
+    }).join('');
+  }, 200);
+});
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('buscador-rapido').contains(e.target) &&
+      !document.getElementById('buscador-resultados').contains(e.target)) {
+    document.getElementById('buscador-resultados').style.display = 'none';
+  }
+});
+
 init();
