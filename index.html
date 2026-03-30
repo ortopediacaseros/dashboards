@@ -235,7 +235,14 @@
     const hora = new Date().getHours();
     const saludo = hora >= 5 && hora < 12 ? 'Buen día' : hora >= 12 && hora < 19 ? 'Buenas tardes' : 'Buenas noches';
     document.getElementById('saludo-texto').textContent = `${saludo}, Sil y Lore 👋`;
-    document.getElementById('fecha-hoy').textContent = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    function actualizarFechaHora() {
+      const ahora = new Date();
+      const fecha = ahora.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      const hora = ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('fecha-hoy').textContent = `${fecha} · ${hora}`;
+    }
+    actualizarFechaHora();
+    setInterval(actualizarFechaHora, 60000);
   </script>
 </body>
 </html>
