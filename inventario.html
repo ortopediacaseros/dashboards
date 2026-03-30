@@ -98,13 +98,13 @@
           <table>
             <thead>
               <tr>
-                <th>Producto</th>
+                <th id="th-nombre" data-label="Producto" onclick="setSortCol('nombre')" style="cursor:pointer;user-select:none">Producto</th>
                 <th>SKU</th>
                 <th>EAN</th>
-                <th>Stock</th>
+                <th id="th-stock" data-label="Stock" onclick="setSortCol('stock_actual')" style="cursor:pointer;user-select:none">Stock</th>
                 <th>Mín.</th>
-                <th>P. Venta</th>
-                <th>P. Costo</th>
+                <th id="th-pventa" data-label="P. Venta" onclick="setSortCol('precio_venta')" style="cursor:pointer;user-select:none">P. Venta</th>
+                <th id="th-pcosto" data-label="P. Costo" onclick="setSortCol('precio_costo')" style="cursor:pointer;user-select:none">P. Costo</th>
                 <th>Margen</th>
                 <th>Acciones</th>
               </tr>

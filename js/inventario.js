@@ -5,6 +5,8 @@ let todosProductos = [];
 let filtroCategoria = '';
 let filtroStock = '';
 let filtroTexto = '';
+let sortCol = 'nombre';
+let sortDir = 'asc';
 
 async function init() {
   const session = await checkAuth();
@@ -59,6 +61,18 @@ function llenarFiltros() {
   });
 }
 
+function setSortCol(col) {
+  if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  else { sortCol = col; sortDir = 'asc'; }
+  renderTabla();
+}
+window.setSortCol = setSortCol;
+
+function sortIcon(col) {
+  if (sortCol !== col) return '<span style="opacity:0.25;margin-left:4px">↕</span>';
+  return `<span style="margin-left:4px;color:var(--teal)">${sortDir === 'asc' ? '↑' : '↓'}</span>`;
+}
+
 function renderTabla() {
   let productos = todosProductos;
 
@@ -75,6 +89,23 @@ function renderTabla() {
       p.categoria.toLowerCase().includes(q)
     );
   }
+
+  // Ordenar
+  productos = [...productos].sort((a, b) => {
+    let va = a[sortCol] ?? '', vb = b[sortCol] ?? '';
+    const res = typeof va === 'string' ? va.localeCompare(vb, 'es') : va - vb;
+    return sortDir === 'asc' ? res : -res;
+  });
+
+  // Actualizar headers con indicador de orden
+  const thMap = {
+    nombre: 'th-nombre', stock_actual: 'th-stock', precio_venta: 'th-pventa',
+    precio_costo: 'th-pcosto', categoria: 'th-cat'
+  };
+  Object.entries(thMap).forEach(([col, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = el.dataset.label + sortIcon(col);
+  });
 
   const tbody = document.getElementById('inventario-tbody');
   if (productos.length === 0) {
@@ -566,8 +597,28 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
   const btn = document.getElementById('btn-importar-csv');
   const previewEl = document.getElementById('csv-preview');
   btn.disabled = true;
-  btn.textContent = 'Importando...';
+  btn.textContent = 'Limpiando datos anteriores...';
 
+  // Antes de importar: buscar y borrar registros corruptos del lote anterior
+  // Los EANs del CSV actual son los "reales". Si en la DB hay un producto cuyo
+  // stock_actual coincide con algún precio del CSV → fue un precio mal importado como stock.
+  const preciosDelCSV = new Set(csvData.map(r => Math.round(parseFloat(r.precio_venta))).filter(Boolean));
+  const { data: todosDB } = await supabase.from('productos').select('id, stock_actual, ean');
+  const eansDelCSV = new Set(csvData.map(r => r.ean?.trim()).filter(Boolean));
+
+  const corruptos = (todosDB || []).filter(p =>
+    !eansDelCSV.has(p.ean) &&           // no está en el CSV actual (no lo vamos a actualizar)
+    preciosDelCSV.has(p.stock_actual)   // su stock coincide exactamente con un precio del CSV
+  );
+
+  let limpiadosCnt = 0;
+  if (corruptos.length) {
+    const ids = corruptos.map(p => p.id);
+    await supabase.from('productos').delete().in('id', ids);
+    limpiadosCnt = corruptos.length;
+  }
+
+  btn.textContent = 'Importando...';
   let ok = 0, skip = 0;
   const errores = [];
 
@@ -599,15 +650,15 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
 
   btn.disabled = false;
   showToast(
-    `${ok} importados/actualizados${errores.length ? ` · ${errores.length} errores` : ''}`,
+    `${ok} importados/actualizados${limpiadosCnt ? ` · ${limpiadosCnt} corruptos eliminados` : ''}${errores.length ? ` · ${errores.length} errores` : ''}`,
     errores.length > 0 ? 'warning' : 'success', 6000
   );
 
   // Log de resultados
   previewEl.innerHTML = `
     <div style="margin-bottom:10px;font-size:0.867rem">
-      <span style="color:var(--green)">✅ ${ok} importados</span>
-      ${skip ? `&nbsp;·&nbsp;<span style="color:var(--text-muted)">⏭ ${skip} saltados</span>` : ''}
+      <span style="color:var(--green)">✅ ${ok} importados/actualizados</span>
+      ${limpiadosCnt ? `&nbsp;·&nbsp;<span style="color:var(--amber)">🧹 ${limpiadosCnt} registros corruptos eliminados</span>` : ''}
       ${errores.length ? `&nbsp;·&nbsp;<span style="color:var(--red)">❌ ${errores.length} fallaron</span>` : ''}
     </div>
     ${errores.length ? `
