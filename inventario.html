@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventario — Ortopedia Caseros</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <button class="hamburger" id="hamburger">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="logo">🦴 Ortopedia Caseros</div>
+      <a href="index.html">📊 Dashboard</a>
+      <a href="pos.html">🛒 POS / Venta</a>
+      <a href="caja.html">💰 Caja</a>
+      <a href="inventario.html" class="active">📦 Inventario</a>
+      <a href="facturas.html">🧾 Facturas</a>
+      <a href="precios.html">🏷️ Precios</a>
+      <a href="reportes.html">📈 Reportes</a>
+    </nav>
+
+    <main class="main">
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h1>📦 Inventario</h1>
+          <p>Stock completo de productos</p>
+        </div>
+        <button class="btn btn-primary" id="btn-agregar">+ Agregar producto</button>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Total productos</div>
+          <div class="kpi-value" id="kpi-total">—</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-label">Stock crítico</div>
+          <div class="kpi-value" id="kpi-criticos">—</div>
+          <div class="kpi-sub">≤ stock mínimo</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-label">Valor inventario</div>
+          <div class="kpi-value" id="kpi-valor">—</div>
+          <div class="kpi-sub">a precio de costo</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-label">Unidades totales</div>
+          <div class="kpi-value" id="kpi-unidades">—</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+          <input type="text" class="input" id="busqueda" placeholder="🔍 Buscar por nombre, SKU, EAN..."
+            style="flex:1;min-width:200px">
+          <select class="select" id="filtro-categoria" style="min-width:180px">
+            <option value="">Todas las categorías</option>
+          </select>
+          <select class="select" id="filtro-stock" style="min-width:160px">
+            <option value="">Todo el stock</option>
+            <option value="critico">🔴 Crítico</option>
+            <option value="bajo">🟡 Bajo</option>
+            <option value="ok">🟢 OK</option>
+          </select>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>SKU</th>
+                <th>EAN</th>
+                <th>Stock</th>
+                <th>Mín.</th>
+                <th>P. Venta</th>
+                <th>P. Costo</th>
+                <th>Margen</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="inventario-tbody">
+              <tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:32px">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="pos.html"><span class="icon">🛒</span>POS</a>
+    <a href="caja.html"><span class="icon">💰</span>Caja</a>
+    <a href="inventario.html" class="active"><span class="icon">📦</span>Stock</a>
+    <a href="index.html"><span class="icon">📊</span>Panel</a>
+  </nav>
+
+  <!-- Modal editar -->
+  <div class="modal-overlay hidden" id="modal-editar">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Editar producto</span>
+        <button class="modal-close" id="btn-cerrar-editar">✕</button>
+      </div>
+      <form id="form-editar">
+        <input type="hidden" id="edit-id">
+        <div class="form-group">
+          <label>Nombre</label>
+          <input type="text" class="input" id="edit-nombre" required>
+        </div>
+        <div class="form-group">
+          <label>Categoría</label>
+          <input type="text" class="input" id="edit-categoria" required>
+        </div>
+        <div class="form-group">
+          <label>EAN (opcional)</label>
+          <input type="text" class="input" id="edit-ean">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Precio venta</label>
+            <input type="number" class="input" id="edit-precio-venta" min="0" step="0.01" required>
+          </div>
+          <div class="form-group">
+            <label>Precio costo</label>
+            <input type="number" class="input" id="edit-precio-costo" min="0" step="0.01" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Stock mínimo</label>
+          <input type="number" class="input" id="edit-stock-minimo" min="0">
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Guardar cambios</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal ajustar stock -->
+  <div class="modal-overlay hidden" id="modal-ajuste">
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header">
+        <span class="modal-title">Ajustar stock</span>
+        <button class="modal-close" id="btn-cerrar-ajuste">✕</button>
+      </div>
+      <form id="form-ajuste">
+        <input type="hidden" id="ajuste-id">
+        <p id="ajuste-nombre" style="font-weight:600;margin-bottom:16px"></p>
+        <div style="text-align:center;margin-bottom:16px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">STOCK ACTUAL → NUEVO</div>
+          <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700">
+            <span id="ajuste-actual">0</span>
+            <span style="color:var(--text-dim);margin:0 8px">→</span>
+            <span id="preview-nuevo">0</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Ajuste (positivo para sumar, negativo para restar)</label>
+          <input type="number" class="input" id="ajuste-cantidad" value="0"
+            style="font-size:20px;text-align:center;font-family:'Syne',sans-serif">
+        </div>
+        <button type="submit" class="btn btn-amber btn-full">Aplicar ajuste</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal nuevo -->
+  <div class="modal-overlay hidden" id="modal-nuevo">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Nuevo producto</span>
+        <button class="modal-close" id="btn-cerrar-nuevo">✕</button>
+      </div>
+      <form id="form-nuevo-inventario">
+        <div class="form-group">
+          <label>EAN (opcional)</label>
+          <input type="text" class="input" name="ean" placeholder="Dejar vacío si no tiene">
+        </div>
+        <div class="form-group">
+          <label>Nombre *</label>
+          <input type="text" class="input" name="nombre" required>
+        </div>
+        <div class="form-group">
+          <label>Categoría *</label>
+          <input type="text" class="input" name="categoria" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Precio venta *</label>
+            <input type="number" class="input" name="precio_venta" required min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Precio costo *</label>
+            <input type="number" class="input" name="precio_costo" required min="0" step="0.01">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Stock actual</label>
+            <input type="number" class="input" name="stock_actual" min="0" value="0">
+          </div>
+          <div class="form-group">
+            <label>Stock mínimo</label>
+            <input type="number" class="input" name="stock_minimo" min="0" value="5">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Guardar producto</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    });
+  </script>
+
+  <script type="module" src="js/inventario.js"></script>
+</body>
+</html>

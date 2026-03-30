@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Precios — Ortopedia Caseros</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .preview-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .preview-row:last-child { border-bottom: none; }
+    .preview-row.header {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding-bottom: 8px;
+    }
+    .arrow { color: var(--teal); font-size: 14px; }
+    .price-new { color: var(--teal); font-weight: 600; }
+    .hist-row {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+    .hist-row:last-child { border-bottom: none; }
+  </style>
+</head>
+<body>
+  <button class="hamburger" id="hamburger">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="logo">🦴 Ortopedia Caseros</div>
+      <a href="index.html">📊 Dashboard</a>
+      <a href="pos.html">🛒 POS / Venta</a>
+      <a href="caja.html">💰 Caja</a>
+      <a href="inventario.html">📦 Inventario</a>
+      <a href="facturas.html">🧾 Facturas</a>
+      <a href="precios.html" class="active">🏷️ Precios</a>
+      <a href="reportes.html">📈 Reportes</a>
+    </nav>
+
+    <main class="main">
+      <div class="page-header">
+        <h1>🏷️ Actualización de Precios</h1>
+        <p>Aplicá aumentos o descuentos masivos por categoría</p>
+      </div>
+
+      <!-- Formulario de actualización -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-title">Configurar actualización</div>
+        <form id="form-precios">
+          <div class="form-row" style="margin-bottom:14px">
+            <div class="form-group">
+              <label>Categoría</label>
+              <select class="select" id="sel-categoria">
+                <option value="">Todas las categorías</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Aplicar a</label>
+              <select class="select" id="sel-tipo">
+                <option value="venta">Precio de venta</option>
+                <option value="costo">Precio de costo</option>
+                <option value="ambos">Ambos precios</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row" style="margin-bottom:14px">
+            <div class="form-group">
+              <label>Porcentaje (%)</label>
+              <input type="number" class="input" id="input-pct" placeholder="Ej: 10 (aumento) o -5 (descuento)" step="0.1">
+            </div>
+            <div class="form-group">
+              <label>Motivo</label>
+              <input type="text" class="input" id="input-motivo" placeholder="Ej: Inflación marzo, Lista nueva proveedor">
+            </div>
+          </div>
+          <button type="button" class="btn btn-secondary" id="btn-preview">🔍 Ver preview</button>
+        </form>
+      </div>
+
+      <!-- Preview -->
+      <div class="card" id="card-preview" style="margin-bottom:20px;display:none">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span id="preview-titulo">Preview</span>
+          <span id="preview-count" style="font-size:12px;color:var(--text-muted)"></span>
+        </div>
+        <div id="preview-container"></div>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+          <button class="btn btn-primary" id="btn-aplicar" disabled>✅ Aplicar cambios</button>
+          <button class="btn btn-secondary" id="btn-cancelar-preview">Cancelar</button>
+          <span id="aviso-cantidad" style="font-size:12px;color:var(--amber)"></span>
+        </div>
+      </div>
+
+      <!-- Historial -->
+      <div class="card">
+        <div class="card-title">Historial de actualizaciones</div>
+        <div id="historial-container">
+          <div class="loading"><div class="spinner"></div> Cargando...</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="pos.html"><span class="icon">🛒</span>POS</a>
+    <a href="caja.html"><span class="icon">💰</span>Caja</a>
+    <a href="index.html"><span class="icon">📊</span>Dashboard</a>
+    <a href="inventario.html"><span class="icon">📦</span>Stock</a>
+    <a href="reportes.html"><span class="icon">📈</span>Reportes</a>
+  </nav>
+
+  <script type="module" src="js/precios.js"></script>
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    });
+  </script>
+</body>
+</html>

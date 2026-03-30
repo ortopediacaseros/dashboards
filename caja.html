@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Caja — Ortopedia Caseros</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <button class="hamburger" id="hamburger">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="logo">🦴 Ortopedia Caseros</div>
+      <a href="index.html">📊 Dashboard</a>
+      <a href="pos.html">🛒 POS / Venta</a>
+      <a href="caja.html" class="active">💰 Caja</a>
+      <a href="inventario.html">📦 Inventario</a>
+      <a href="facturas.html">🧾 Facturas</a>
+      <a href="precios.html">🏷️ Precios</a>
+      <a href="reportes.html">📈 Reportes</a>
+    </nav>
+
+    <main class="main">
+      <div class="page-header">
+        <h1>💰 Caja</h1>
+        <p>Apertura y cierre de caja diario</p>
+      </div>
+
+      <div id="caja-container">
+        <div class="loading"><div class="spinner"></div> Cargando...</div>
+      </div>
+
+      <div class="divider" style="margin-top:32px"></div>
+
+      <div class="card" style="margin-top:24px">
+        <div class="card-title">Historial — últimos 30 días</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Ef. inicial</th>
+                <th>Total ventas</th>
+                <th>Ef. final</th>
+                <th>Diferencia</th>
+                <th>Estado</th>
+                <th>Comentarios</th>
+              </tr>
+            </thead>
+            <tbody id="historial-tbody">
+              <tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:24px">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="pos.html"><span class="icon">🛒</span>POS</a>
+    <a href="caja.html" class="active"><span class="icon">💰</span>Caja</a>
+    <a href="inventario.html"><span class="icon">📦</span>Stock</a>
+    <a href="index.html"><span class="icon">📊</span>Panel</a>
+  </nav>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    });
+  </script>
+
+  <script type="module" src="js/caja.js"></script>
+</body>
+</html>

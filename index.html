@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Ortopedia Caseros</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .dash-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .dash-grid .full { grid-column: 1 / -1; }
+    .alert-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .alert-item:last-child { border-bottom: none; }
+    .bar-chart-month {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 80px;
+      padding-top: 8px;
+    }
+    .bar-month-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      height: 100%;
+      justify-content: flex-end;
+    }
+    .bar-month-fill {
+      width: 100%;
+      background: var(--teal);
+      border-radius: 2px 2px 0 0;
+      min-height: 2px;
+      opacity: 0.8;
+    }
+    .bar-month-fill.today { opacity: 1; background: var(--teal); }
+    .bar-month-label { font-size: 8px; color: var(--text-dim); }
+    .top-prod-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .top-prod-item:last-child { border-bottom: none; }
+    .pay-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+    }
+    .pay-row:last-child { border-bottom: none; }
+    @media (max-width: 768px) {
+      .dash-grid { grid-template-columns: 1fr; }
+      .dash-grid .full { grid-column: 1; }
+    }
+  </style>
+</head>
+<body>
+  <button class="hamburger" id="hamburger">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="logo">🦴 Ortopedia Caseros</div>
+      <a href="index.html" class="active">📊 Dashboard</a>
+      <a href="pos.html">🛒 POS / Venta</a>
+      <a href="caja.html">💰 Caja</a>
+      <a href="inventario.html">📦 Inventario</a>
+      <a href="facturas.html">🧾 Facturas</a>
+      <a href="precios.html">🏷️ Precios</a>
+      <a href="reportes.html">📈 Reportes</a>
+    </nav>
+
+    <main class="main">
+      <div class="page-header">
+        <h1>📊 Dashboard</h1>
+        <p id="fecha-hoy" style="color:var(--text-muted);font-size:13px"></p>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Ventas hoy</div>
+          <div class="kpi-value" id="kpi-ventas-hoy">—</div>
+          <div class="kpi-sub" id="kpi-tickets-hoy">— tickets</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-label">Ventas del mes</div>
+          <div class="kpi-value" id="kpi-ventas-mes">—</div>
+          <div class="kpi-sub" id="kpi-tickets-mes">— tickets</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-label">Ganancia neta hoy</div>
+          <div class="kpi-value" id="kpi-ganancia-hoy">—</div>
+          <div class="kpi-sub" id="kpi-margen-hoy">margen —%</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-label">Stock crítico</div>
+          <div class="kpi-value" id="kpi-stock-crit">—</div>
+          <div class="kpi-sub">productos bajo mínimo</div>
+        </div>
+      </div>
+
+      <div class="dash-grid">
+        <!-- Gráfico de barras del mes -->
+        <div class="card">
+          <div class="card-title">Ventas del mes — por día</div>
+          <div class="bar-chart-month" id="bar-chart-mes"></div>
+        </div>
+
+        <!-- Resumen del día por medio de pago -->
+        <div class="card">
+          <div class="card-title">Hoy por medio de pago</div>
+          <div id="breakdown-pago">
+            <div class="loading"><div class="spinner"></div> Cargando...</div>
+          </div>
+        </div>
+
+        <!-- Stock crítico -->
+        <div class="card full">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+            <span>⚠️ Stock crítico</span>
+            <a href="inventario.html" style="font-size:12px;color:var(--teal)">Ver todos →</a>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>SKU</th>
+                  <th>Stock actual</th>
+                  <th>Mínimo</th>
+                  <th>Categoría</th>
+                </tr>
+              </thead>
+              <tbody id="stock-crit-tbody">
+                <tr><td colspan="5" class="loading"><div class="spinner"></div> Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Top productos del mes -->
+        <div class="card">
+          <div class="card-title">Top productos del mes</div>
+          <div id="top-productos">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- Centro de alertas -->
+        <div class="card">
+          <div class="card-title">Centro de alertas</div>
+          <div id="alertas-container">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- Accesos rápidos -->
+        <div class="card full" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <div class="card-title">Actualización rápida de precios</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Aplicá un % de aumento a toda una categoría</p>
+            <a href="precios.html" class="btn btn-amber btn-full">🏷️ Ir a Precios</a>
+          </div>
+          <div>
+            <div class="card-title">Subir factura</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Registrá facturas de proveedores</p>
+            <a href="facturas.html" class="btn btn-secondary btn-full">🧾 Ir a Facturas</a>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Bottom nav mobile -->
+  <nav class="bottom-nav">
+    <a href="pos.html"><span class="icon">🛒</span>POS</a>
+    <a href="caja.html"><span class="icon">💰</span>Caja</a>
+    <a href="index.html" class="active"><span class="icon">📊</span>Dashboard</a>
+    <a href="inventario.html"><span class="icon">📦</span>Stock</a>
+    <a href="reportes.html"><span class="icon">📈</span>Reportes</a>
+  </nav>
+
+  <script type="module" src="js/index.js"></script>
+  <script>
+    // Hamburger
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    });
+    // Fecha
+    document.getElementById('fecha-hoy').textContent = new Date().toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  </script>
+</body>
+</html>

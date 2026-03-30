@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POS — Ortopedia Caseros</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .pos-layout {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .scanner-section {
+      margin-bottom: 16px;
+    }
+
+    #scanner-section {
+      margin-top: 12px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #000;
+      position: relative;
+    }
+
+    #scanner-section.hidden { display: none; }
+
+    #scanner-video {
+      width: 100%;
+      max-height: 240px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .scanner-btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    #search-section {
+      margin-top: 12px;
+    }
+
+    #search-section.hidden { display: none; }
+
+    .search-results-wrap {
+      margin-top: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .search-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.12s;
+    }
+
+    .search-item:last-child { border-bottom: none; }
+    .search-item:hover { background: var(--teal-dim); }
+
+    .search-item-name { font-weight: 500; font-size: 14px; }
+    .search-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .search-item-price { font-family: 'Syne', sans-serif; font-weight: 700; color: var(--teal); }
+
+    .search-no-result { padding: 14px; color: var(--text-muted); font-size: 13px; }
+
+    /* Carrito */
+    .carrito-item {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .carrito-item:last-child { border-bottom: none; }
+
+    .carrito-nombre { font-size: 13px; font-weight: 500; min-width: 0; }
+
+    .carrito-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .qty-btn {
+      width: 26px;
+      height: 26px;
+      background: var(--surface-2);
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .qty-btn:hover { background: var(--teal-dim); color: var(--teal); }
+
+    .qty-val {
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .carrito-precio { font-size: 12px; color: var(--text-muted); }
+    .carrito-subtotal { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; }
+
+    .carrito-remove {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 4px;
+      border-radius: 4px;
+    }
+
+    .carrito-remove:hover { color: var(--red); background: var(--red-dim); }
+
+    .total-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 14px;
+      border-top: 1px solid var(--border-strong);
+      margin-top: 4px;
+    }
+
+    .total-label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+    #total-display {
+      font-family: 'Syne', sans-serif;
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--teal);
+    }
+
+    .pago-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .pago-opt {
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+
+    .pago-opt.selected {
+      background: var(--teal-dim);
+      border-color: var(--teal);
+      color: var(--teal);
+    }
+
+    #medio-pago { display: none; }
+
+    @media (max-width: 768px) {
+      .pos-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <button class="hamburger" id="hamburger">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="logo">🦴 Ortopedia Caseros</div>
+      <a href="index.html">📊 Dashboard</a>
+      <a href="pos.html" class="active">🛒 POS / Venta</a>
+      <a href="caja.html">💰 Caja</a>
+      <a href="inventario.html">📦 Inventario</a>
+      <a href="facturas.html">🧾 Facturas</a>
+      <a href="precios.html">🏷️ Precios</a>
+      <a href="reportes.html">📈 Reportes</a>
+    </nav>
+
+    <main class="main">
+      <div class="page-header">
+        <h1>🛒 Punto de Venta</h1>
+        <p>Escaneá o buscá productos para armar el ticket</p>
+      </div>
+
+      <div class="pos-layout">
+        <!-- Izquierda: entrada + carrito -->
+        <div>
+          <!-- Entrada de producto -->
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title">Agregar producto</div>
+            <div class="scanner-btns">
+              <button class="btn btn-secondary btn-lg" id="btn-escanear" style="flex:1">
+                📷 Escanear código
+              </button>
+              <button class="btn btn-secondary btn-lg" id="btn-buscar" style="flex:1">
+                🔍 Buscar sin código
+              </button>
+            </div>
+
+            <div id="scanner-section" class="hidden">
+              <video id="scanner-video" autoplay muted playsinline></video>
+            </div>
+
+            <div id="search-section" class="hidden">
+              <input type="text" class="input" id="search-input"
+                placeholder="Nombre o SKU del producto..." style="margin-top:10px">
+              <div class="search-results-wrap">
+                <div id="search-results"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Carrito -->
+          <div class="card">
+            <div class="card-title">Carrito</div>
+            <div id="carrito-list"></div>
+
+            <div class="divider"></div>
+            <div class="form-group">
+              <label>Descuento %</label>
+              <input type="number" class="input" id="descuento-input"
+                min="0" max="100" step="0.5" placeholder="0">
+            </div>
+            <div class="total-row">
+              <span class="total-label">TOTAL</span>
+              <span id="total-display">$0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Derecha: pago + confirmar -->
+        <div class="card" style="position:sticky;top:20px">
+          <div class="card-title">Medio de pago</div>
+          <select id="medio-pago">
+            <option value="efectivo">Efectivo</option>
+            <option value="debito">Débito</option>
+            <option value="credito">Crédito</option>
+            <option value="transferencia">Transferencia</option>
+          </select>
+
+          <div class="pago-grid" id="pago-grid">
+            <div class="pago-opt selected" data-val="efectivo">💵 Efectivo</div>
+            <div class="pago-opt" data-val="debito">💳 Débito</div>
+            <div class="pago-opt" data-val="credito">💳 Crédito</div>
+            <div class="pago-opt" data-val="transferencia">📲 Transferencia</div>
+          </div>
+
+          <div class="form-group" style="margin-top:8px">
+            <label>Observaciones (opcional)</label>
+            <textarea id="observaciones" class="input" rows="2"
+              placeholder="Notas del ticket..."></textarea>
+          </div>
+
+          <button class="btn btn-primary btn-lg btn-full" id="btn-confirmar" disabled>
+            Confirmar venta — $0
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Bottom nav mobile -->
+  <nav class="bottom-nav">
+    <a href="pos.html" class="active"><span class="icon">🛒</span>POS</a>
+    <a href="caja.html"><span class="icon">💰</span>Caja</a>
+    <a href="inventario.html"><span class="icon">📦</span>Stock</a>
+    <a href="index.html"><span class="icon">📊</span>Panel</a>
+  </nav>
+
+  <!-- Modal nuevo producto -->
+  <div class="modal-overlay hidden" id="modal-nuevo">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Nuevo producto</span>
+        <button class="modal-close" id="btn-cerrar-modal">✕</button>
+      </div>
+      <form id="form-nuevo-producto">
+        <div class="form-group">
+          <label>Código EAN (opcional)</label>
+          <input type="text" class="input" name="ean" id="nuevo-ean" placeholder="Dejar vacío si no tiene">
+        </div>
+        <div class="form-group">
+          <label>Nombre *</label>
+          <input type="text" class="input" name="nombre" required placeholder="Ej: Muleta aluminio talle M">
+        </div>
+        <div class="form-group">
+          <label>Categoría *</label>
+          <input type="text" class="input" name="categoria" required placeholder="Ej: Muletas, Órtesis, Calzado...">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Precio venta *</label>
+            <input type="number" class="input" name="precio_venta" required min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label>Precio costo *</label>
+            <input type="number" class="input" name="precio_costo" required min="0" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Stock inicial</label>
+            <input type="number" class="input" name="stock_inicial" min="0" value="1" placeholder="1">
+          </div>
+          <div class="form-group">
+            <label>Stock mínimo</label>
+            <input type="number" class="input" name="stock_minimo" min="0" value="5" placeholder="5">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Guardar y agregar al carrito</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Hamburger
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    });
+
+    // Pago buttons
+    const pagoGrid = document.getElementById('pago-grid');
+    const medioPago = document.getElementById('medio-pago');
+    pagoGrid.querySelectorAll('.pago-opt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        pagoGrid.querySelectorAll('.pago-opt').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        medioPago.value = btn.dataset.val;
+      });
+    });
+  </script>
+
+  <script type="module" src="js/pos.js"></script>
+</body>
+</html>

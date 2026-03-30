@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reportes — Ortopedia Caseros</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    /* Toggle buttons */
+    .toggle-group {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      width: fit-content;
+      margin-bottom: 24px;
+    }
+    .toggle-group label {
+      padding: 10px 28px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: var(--surface-2);
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .toggle-group input[type="radio"] { display: none; }
+    .toggle-group input[type="radio"]:checked + label {
+      background: var(--teal);
+      color: #000;
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 16px;
+      text-align: center;
+    }
+    .kpi-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .kpi-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--teal);
+    }
+
+    /* Breakdown pago */
+    .breakdown-row {
+      display: grid;
+      grid-template-columns: 120px 1fr 110px 60px;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .breakdown-row:last-child { border-bottom: none; }
+    .breakdown-label { font-size: 13px; font-weight: 500; }
+    .breakdown-bar-wrap { background: var(--surface-3, #222); border-radius: 4px; height: 8px; overflow: hidden; }
+    .breakdown-bar { background: var(--teal); height: 100%; border-radius: 4px; transition: width .4s; }
+    .breakdown-val { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; text-align: right; }
+    .breakdown-pct { font-size: 12px; color: var(--text-muted); text-align: right; }
+
+    /* Top productos table */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table th { text-align: left; padding: 8px 10px; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border-strong); }
+    .data-table td { padding: 10px; border-bottom: 1px solid var(--border); }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--teal-dim); }
+    .text-right { text-align: right; }
+    .text-muted { color: var(--text-muted); }
+    .center { text-align: center; }
+
+    /* Caja grid */
+    .caja-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+    .caja-item { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+    .caja-item span { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+
+    /* Bar chart */
+    .bar-chart-wrap {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 160px;
+      padding-bottom: 28px;
+      position: relative;
+    }
+    .bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      height: 100%;
+      position: relative;
+      cursor: pointer;
+    }
+    .bar-fill {
+      width: 100%;
+      background: var(--teal);
+      border-radius: 3px 3px 0 0;
+      min-height: 2px;
+      transition: height .3s, background .15s;
+    }
+    .bar-col:hover .bar-fill { background: var(--teal-light, #2dd4bf); }
+    .bar-label {
+      position: absolute;
+      bottom: -22px;
+      font-size: 9px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    /* Category bars */
+    .cat-row { margin-bottom: 14px; }
+    .cat-header { display: flex; gap: 12px; align-items: baseline; margin-bottom: 5px; font-size: 13px; }
+    .cat-name { flex: 1; font-weight: 500; }
+    .cat-total { font-family: 'Syne', sans-serif; font-weight: 700; }
+    .cat-gain { font-size: 12px; }
+    .cat-bar-wrap { background: var(--surface-3, #222); border-radius: 4px; height: 8px; overflow: hidden; }
+    .cat-bar { background: var(--teal); height: 100%; border-radius: 4px; transition: width .4s; }
+
+    /* Comparativa */
+    .comparativa-header { margin-bottom: 14px; font-size: 13px; color: var(--text-muted); }
+    .comparativa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+    .comp-item { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+    .comp-label { font-size: 11px; text-transform: uppercase; color: var(--text-muted); }
+    .comp-curr { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; }
+    .comp-prev { font-size: 12px; }
+    .delta { font-size: 13px; font-weight: 700; padding: 2px 6px; border-radius: 4px; width: fit-content; margin-top: 2px; }
+    .delta.positive { color: var(--green); background: var(--green-dim, rgba(34,197,94,.12)); }
+    .delta.negative { color: var(--red); background: var(--red-dim); }
+    .delta.neutral  { color: var(--text-muted); }
+
+    /* Badges */
+    .badge { padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .badge-green  { background: rgba(34,197,94,.15); color: var(--green); }
+    .badge-yellow { background: rgba(234,179,8,.15); color: var(--yellow); }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 600px) {
+      .breakdown-row { grid-template-columns: 90px 1fr 80px; }
+      .breakdown-pct { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <button class="hamburger" id="hamburger">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="logo">🦴 Ortopedia Caseros</div>
+      <a href="index.html">📊 Dashboard</a>
+      <a href="pos.html">🛒 POS / Venta</a>
+      <a href="caja.html">💰 Caja</a>
+      <a href="inventario.html">📦 Inventario</a>
+      <a href="facturas.html">🧾 Facturas</a>
+      <a href="precios.html">🏷️ Precios</a>
+      <a href="reportes.html" class="active">📈 Reportes</a>
+    </nav>
+
+    <main class="main">
+      <div class="page-header">
+        <h1>📈 Reportes</h1>
+        <p>Análisis de ventas, ganancias y rendimiento</p>
+      </div>
+
+      <!-- Toggle Diario / Mensual -->
+      <div class="toggle-group">
+        <input type="radio" id="r-diario"  name="tipo-reporte" value="diario"  checked>
+        <label for="r-diario">Diario</label>
+        <input type="radio" id="r-mensual" name="tipo-reporte" value="mensual">
+        <label for="r-mensual">Mensual</label>
+      </div>
+      <!-- Hidden select for JS compatibility -->
+      <select id="tipo-reporte" style="display:none">
+        <option value="diario">Diario</option>
+        <option value="mensual">Mensual</option>
+      </select>
+
+      <!-- ── REPORTE DIARIO ─────────────────────────────────────────── -->
+      <div id="reporte-diario">
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title">Seleccionar fecha</div>
+          <input type="date" id="fecha-diario" class="input" style="max-width:220px">
+        </div>
+
+        <!-- KPIs -->
+        <div id="kpis-diario" class="kpi-grid"></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+          <!-- Breakdown por pago -->
+          <div class="card">
+            <div class="card-title">Por medio de pago</div>
+            <div id="breakdown-pago">
+              <p class="text-muted">Cargando...</p>
+            </div>
+          </div>
+
+          <!-- Caja del día -->
+          <div class="card">
+            <div class="card-title">Caja del día</div>
+            <div id="info-caja">
+              <p class="text-muted">Cargando...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top 5 productos -->
+        <div class="card">
+          <div class="card-title">Top 5 productos del día</div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Producto</th>
+                <th class="text-right">Cant.</th>
+                <th class="text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-top-productos">
+              <tr><td colspan="4" class="text-muted center">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── REPORTE MENSUAL ────────────────────────────────────────── -->
+      <div id="reporte-mensual" class="hidden">
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title">Seleccionar período</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <select id="mes-sel" class="input" style="width:160px">
+              <option value="1">Enero</option>
+              <option value="2">Febrero</option>
+              <option value="3">Marzo</option>
+              <option value="4">Abril</option>
+              <option value="5">Mayo</option>
+              <option value="6">Junio</option>
+              <option value="7">Julio</option>
+              <option value="8">Agosto</option>
+              <option value="9">Septiembre</option>
+              <option value="10">Octubre</option>
+              <option value="11">Noviembre</option>
+              <option value="12">Diciembre</option>
+            </select>
+            <select id="año-sel" class="input" style="width:100px"></select>
+            <button id="btn-exportar-csv" class="btn btn-secondary">⬇ Exportar CSV</button>
+          </div>
+        </div>
+
+        <!-- KPIs Mensual -->
+        <div id="kpis-mensual" class="kpi-grid"></div>
+
+        <!-- Bar chart -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title">Ventas por día</div>
+          <div id="bar-chart">
+            <p class="text-muted">Cargando...</p>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+          <!-- Categorías -->
+          <div class="card">
+            <div class="card-title">Por categoría</div>
+            <div id="tabla-categorias">
+              <p class="text-muted">Cargando...</p>
+            </div>
+          </div>
+
+          <!-- Comparativa -->
+          <div class="card">
+            <div class="card-title">Comparativa mes anterior</div>
+            <div id="comparativa">
+              <p class="text-muted">Cargando...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Bottom nav mobile -->
+  <nav class="bottom-nav">
+    <a href="pos.html"><span class="icon">🛒</span>POS</a>
+    <a href="caja.html"><span class="icon">💰</span>Caja</a>
+    <a href="inventario.html"><span class="icon">📦</span>Stock</a>
+    <a href="index.html"><span class="icon">📊</span>Panel</a>
+  </nav>
+
+  <script>
+    // Hamburger
+    const hamburger = document.getElementById('hamburger');
+    const sidebar   = document.getElementById('sidebar');
+    const overlay   = document.getElementById('sidebar-overlay');
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    });
+
+    // Sync radio buttons with hidden select
+    document.querySelectorAll('input[name="tipo-reporte"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById('tipo-reporte').value = radio.value;
+        document.getElementById('tipo-reporte').dispatchEvent(new Event('change'));
+      });
+    });
+  </script>
+
+  <script type="module" src="js/reportes.js"></script>
+</body>
+</html>
