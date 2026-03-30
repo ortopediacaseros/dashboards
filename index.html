@@ -87,9 +87,15 @@
     </nav>
 
     <main class="main">
-      <div class="page-header">
-        <h1>📊 Dashboard</h1>
-        <p id="fecha-hoy" style="color:var(--text-muted);font-size:13px"></p>
+      <!-- Banner de bienvenida -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700" id="saludo-texto"></div>
+          <div style="font-size:13px;color:var(--text-muted);margin-top:3px" id="fecha-hoy"></div>
+        </div>
+        <div id="clima-widget" style="display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:13px">
+          <div class="spinner" style="width:14px;height:14px"></div>
+        </div>
       </div>
 
       <!-- KPIs -->
@@ -197,6 +203,19 @@
     <a href="reportes.html"><span class="icon">📈</span>Reportes</a>
   </nav>
 
+  <!-- Popup caja no abierta -->
+  <div class="modal-overlay hidden" id="modal-caja-dash">
+    <div class="modal" style="max-width:380px;text-align:center">
+      <div style="font-size:44px;margin-bottom:12px">💰</div>
+      <div class="modal-title" style="margin-bottom:8px">Caja no abierta</div>
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:24px">No hay caja abierta para hoy. ¿Abrimos?</p>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <a href="caja.html" class="btn btn-primary">💰 Ir a Caja</a>
+        <button class="btn btn-secondary" id="btn-ignorar-caja">Ahora no</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="js/index.js"></script>
   <script>
     // Hamburger
@@ -211,8 +230,11 @@
       sidebar.classList.remove('open');
       overlay.classList.remove('open');
     });
-    // Fecha
-    document.getElementById('fecha-hoy').textContent = new Date().toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    // Saludo y fecha
+    const hora = new Date().getHours();
+    const saludo = hora >= 5 && hora < 12 ? 'Buen día' : hora >= 12 && hora < 19 ? 'Buenas tardes' : 'Buenas noches';
+    document.getElementById('saludo-texto').textContent = `${saludo}, Sil y Lore 👋`;
+    document.getElementById('fecha-hoy').textContent = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   </script>
 </body>
 </html>

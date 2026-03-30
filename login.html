@@ -55,13 +55,26 @@
     <form id="form-login">
       <div class="form-group">
         <label>Contraseña</label>
-        <input type="password" class="input" id="input-password"
-          placeholder="••••••••" required autofocus>
+        <div style="position:relative">
+          <input type="password" class="input" id="input-password"
+            placeholder="••••••••" required autofocus style="padding-right:44px">
+          <button type="button" id="btn-toggle-pass"
+            style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:0;line-height:1">
+            👁
+          </button>
+        </div>
       </div>
       <button type="submit" class="btn btn-primary btn-full btn-lg" id="btn-login" style="margin-top:8px">
         Ingresar
       </button>
     </form>
+
+    <script>
+      document.getElementById('btn-toggle-pass').addEventListener('click', () => {
+        const inp = document.getElementById('input-password');
+        inp.type = inp.type === 'password' ? 'text' : 'password';
+      });
+    </script>
   </div>
 
   <script type="module" src="js/login.js"></script>

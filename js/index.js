@@ -10,6 +10,8 @@ async function init() {
     cargarStockCritico(),
     cargarTopProductos(),
     cargarAlertas(),
+    cargarClima(),
+    verificarCaja(),
   ]);
 
   // Realtime
@@ -260,6 +262,48 @@ async function cargarAlertas() {
       <span style="font-size:16px">${a.icono}</span>
       <span style="color:${colorMap[a.tipo] || 'var(--text)'}">${a.msg}</span>
     </div>`).join('');
+}
+
+async function cargarClima() {
+  try {
+    const resp = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-34.6037&longitude=-58.5631&current_weather=true&timezone=America%2FArgentina%2FBuenos_Aires');
+    const data = await resp.json();
+    const { temperature, weathercode } = data.current_weather;
+    const { emoji, desc } = climaInfo(weathercode);
+    document.getElementById('clima-widget').innerHTML = `
+      <span style="font-size:24px">${emoji}</span>
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;color:var(--text);line-height:1">${Math.round(temperature)}°C</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:2px">${desc} · Caseros</div>
+      </div>`;
+  } catch (e) {
+    document.getElementById('clima-widget').innerHTML = '';
+  }
+}
+
+function climaInfo(code) {
+  if (code === 0)             return { emoji: '☀️', desc: 'Despejado' };
+  if (code <= 2)              return { emoji: '🌤️', desc: 'Mayormente despejado' };
+  if (code === 3)             return { emoji: '☁️', desc: 'Nublado' };
+  if (code <= 48)             return { emoji: '🌫️', desc: 'Neblina' };
+  if (code <= 57)             return { emoji: '🌦️', desc: 'Llovizna' };
+  if (code <= 67)             return { emoji: '🌧️', desc: 'Lluvia' };
+  if (code <= 77)             return { emoji: '🌨️', desc: 'Nieve' };
+  if (code <= 82)             return { emoji: '🌦️', desc: 'Lluvioso' };
+  return                             { emoji: '⛈️', desc: 'Tormenta' };
+}
+
+async function verificarCaja() {
+  const hoy = new Date().toISOString().split('T')[0];
+  const { data: caja } = await supabase
+    .from('cajas').select('id, estado').eq('fecha', hoy).maybeSingle();
+
+  if (!caja || caja.estado === 'cerrada') {
+    document.getElementById('modal-caja-dash').classList.remove('hidden');
+    document.getElementById('btn-ignorar-caja').addEventListener('click', () => {
+      document.getElementById('modal-caja-dash').classList.add('hidden');
+    });
+  }
 }
 
 init();
