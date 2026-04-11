@@ -7,68 +7,57 @@
   <script>if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');</script>
   <link rel="stylesheet" href="css/styles.css">
   <style>
-    .dash-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
+    .grid-2 { display: grid; grid-template-columns: 1fr 340px; gap: 18px; margin-bottom: 18px; }
+    @media (max-width: 1100px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    .panel-body-flush { padding: 0 20px; }
+
+    .chart-footer {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 0; border-top: 1px solid var(--border);
+      padding-top: 14px; margin-top: 14px; text-align: center;
     }
-    .dash-grid .full { grid-column: 1 / -1; }
-    .alert-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 13px;
-    }
+    .cf-item .cf-label { font-size: 11px; color: var(--text-3); margin-bottom: 3px; }
+    .cf-item .cf-val   { font-size: 14px; font-weight: 700; }
+    .cf-item .cf-sub   { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+    .cf-sep { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+
+    .alert-item { display: flex; align-items: flex-start; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--border); }
     .alert-item:last-child { border-bottom: none; }
-    .bar-chart-month {
-      display: flex;
-      align-items: flex-end;
-      gap: 3px;
-      height: 80px;
-      padding-top: 8px;
+    .alert-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+    .alert-text { font-size: 13px; flex: 1; }
+    .alert-meta { font-size: 11px; color: var(--text-4); margin-top: 2px; }
+
+    .progress-item { margin-bottom: 12px; }
+    .progress-item:last-child { margin-bottom: 0; }
+    .progress-header { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+    .progress-label { color: var(--text-2); font-weight: 500; }
+    .progress-val { color: var(--text-3); }
+    .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 3px; }
+
+    .dash-filter-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 20px; border-bottom: 1px solid var(--border);
+      background: var(--bg); flex-wrap: wrap;
     }
-    .bar-month-item {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-      height: 100%;
-      justify-content: flex-end;
+    .dash-filter-row .fi {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 6px 10px;
+      font-size: 12px; font-family: inherit; color: var(--text); outline: none;
     }
-    .bar-month-fill {
-      width: 100%;
-      background: var(--teal);
-      border-radius: 2px 2px 0 0;
-      min-height: 2px;
-      opacity: 0.8;
-    }
-    .bar-month-fill.today { opacity: 1; background: var(--teal); }
-    .bar-month-label { font-size: 8px; color: var(--text-dim); }
-    .top-prod-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 9px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 13px;
-    }
-    .top-prod-item:last-child { border-bottom: none; }
-    .pay-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 0;
-      font-size: 13px;
-      border-bottom: 1px solid var(--border);
-    }
-    .pay-row:last-child { border-bottom: none; }
-    @media (max-width: 768px) {
-      .dash-grid { grid-template-columns: 1fr; }
-      .dash-grid .full { grid-column: 1; }
-    }
+    .dash-filter-row .fi:focus { border-color: var(--brand); }
+
+    .dash-table { width: 100%; border-collapse: collapse; }
+    .dash-table th { padding: 9px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); background: var(--bg); white-space: nowrap; }
+    .dash-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+    .dash-table tr:last-child td { border-bottom: none; }
+    .dash-table tr:hover td { background: var(--row-hover); }
+
+    .dash-pagination { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-3); }
+
+    .eye-btn { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 9px; cursor: pointer; font-size: 15px; color: var(--text-3); line-height: 1; }
+    .eye-btn:hover { background: var(--bg); }
   </style>
 </head>
 <body>
@@ -90,114 +79,168 @@
     </nav>
 
     <main class="main">
-      <!-- Banner de bienvenida -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-        <div>
-          <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700" id="saludo-texto"></div>
-          <div style="font-size:13px;color:var(--text-muted);margin-top:3px" id="fecha-hoy"></div>
-        </div>
-        <div id="clima-widget" style="display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:13px">
-          <div class="spinner" style="width:14px;height:14px"></div>
-        </div>
+
+      <!-- Saludo + eye toggle -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div id="saludo-texto" style="font-size:15px;font-weight:600"></div>
+        <button class="eye-btn" id="eye-btn" title="Mostrar/ocultar valores">👁</button>
       </div>
 
       <!-- KPIs -->
-      <div class="kpi-grid" id="kpi-grid">
-        <div class="kpi-card">
+      <div class="kpi-row">
+        <div class="kpi">
           <div class="kpi-label">Ventas hoy</div>
-          <div class="kpi-value" id="kpi-ventas-hoy">—</div>
-          <div class="kpi-sub" id="kpi-tickets-hoy">— tickets</div>
+          <div class="kpi-val" id="kpi-ventas-hoy" style="color:var(--green)">—</div>
+          <div class="kpi-sub" id="kpi-sub-hoy">— tickets</div>
         </div>
-        <div class="kpi-card amber">
+        <div class="kpi">
           <div class="kpi-label">Ventas del mes</div>
-          <div class="kpi-value" id="kpi-ventas-mes">—</div>
-          <div class="kpi-sub" id="kpi-tickets-mes">— tickets</div>
+          <div class="kpi-val" id="kpi-ventas-mes">—</div>
+          <div class="kpi-sub" id="kpi-sub-mes">— tickets</div>
         </div>
-        <div class="kpi-card green">
-          <div class="kpi-label">Ganancia neta hoy</div>
-          <div class="kpi-value" id="kpi-ganancia-hoy">—</div>
-          <div class="kpi-sub" id="kpi-margen-hoy">margen —%</div>
+        <div class="kpi">
+          <div class="kpi-label">Ganancia neta</div>
+          <div class="kpi-val" id="kpi-ganancia" style="color:var(--blue)">—</div>
+          <div class="kpi-sub" id="kpi-sub-margen">Margen —%</div>
         </div>
-        <div class="kpi-card red">
+        <div class="kpi">
+          <div class="kpi-label">Tickets emitidos</div>
+          <div class="kpi-val" id="kpi-tickets-mes">—</div>
+          <div class="kpi-sub" id="kpi-sub-tickets">Este mes</div>
+        </div>
+        <div class="kpi">
           <div class="kpi-label">Stock crítico</div>
-          <div class="kpi-value" id="kpi-stock-crit">—</div>
-          <div class="kpi-sub">productos bajo mínimo</div>
+          <div class="kpi-val" id="kpi-stock-crit" style="color:var(--red)">—</div>
+          <div class="kpi-sub">Productos bajo mínimo</div>
         </div>
       </div>
 
-      <div class="dash-grid">
-        <!-- Gráfico de barras del mes -->
-        <div class="card">
-          <div class="card-title">Ventas del mes — por día</div>
-          <div class="bar-chart-month" id="bar-chart-mes"></div>
-        </div>
-
-        <!-- Resumen del día por medio de pago -->
-        <div class="card">
-          <div class="card-title">Hoy por medio de pago</div>
-          <div id="breakdown-pago">
-            <div class="loading"><div class="spinner"></div> Cargando...</div>
+      <!-- GRÁFICO + RESUMEN DEL DÍA -->
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title" id="chart-title">Ventas — este mes</div>
+              <div class="panel-sub">Facturación diaria</div>
+            </div>
+            <span class="panel-action" style="cursor:pointer" onclick="location.href='reportes.html'">Ver detalle →</span>
+          </div>
+          <div class="panel-body">
+            <div class="bar-chart" id="bar-chart-mes" style="height:110px"></div>
+            <div class="chart-footer">
+              <div class="cf-item">
+                <div class="cf-label">Mejor día</div>
+                <div class="cf-val" id="cf-mejor-dia">—</div>
+                <div class="cf-sub" id="cf-mejor-monto" style="color:var(--green)">—</div>
+              </div>
+              <div class="cf-item cf-sep">
+                <div class="cf-label">Promedio/día</div>
+                <div class="cf-val" id="cf-promedio">—</div>
+                <div class="cf-sub" id="cf-dias-habil">— días</div>
+              </div>
+              <div class="cf-item">
+                <div class="cf-label">Proyección mes</div>
+                <div class="cf-val" id="cf-proyeccion">—</div>
+                <div class="cf-sub" id="cf-proy-delta" style="color:var(--text-3)">—</div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Stock crítico -->
-        <div class="card full">
-          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-            <span>⚠️ Stock crítico</span>
-            <a href="inventario.html" style="font-size:12px;color:var(--teal)">Ver todos →</a>
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title">Resumen del día</div>
+              <div class="panel-sub" id="resumen-fecha">—</div>
+            </div>
           </div>
-          <div class="table-wrap">
-            <table>
+          <div class="panel-body panel-body-flush">
+            <div class="sum-row"><span class="sum-label">Tickets emitidos</span><span class="sum-val" id="res-tickets">—</span></div>
+            <div class="sum-row"><span class="sum-label">Total facturado</span><span class="sum-val" id="res-facturado" style="color:var(--green)">—</span></div>
+            <div class="sum-row"><span class="sum-label">Costo mercadería</span><span class="sum-val" id="res-costo">—</span></div>
+            <div class="sum-row"><span class="sum-label">Ganancia bruta</span><span class="sum-val" id="res-ganancia" style="color:var(--blue)">—</span></div>
+            <div class="sum-row"><span class="sum-label">Margen bruto</span><span class="sum-val" id="res-margen">—</span></div>
+            <div class="sum-row">
+              <span class="sum-label">Por medio de pago</span>
+              <div id="res-medios-pago" style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"></div>
+            </div>
+            <div class="sum-row"><span class="sum-label">Producto más vendido</span><span class="sum-val" id="res-top-prod" style="font-size:12px">—</span></div>
+            <div class="sum-row"><span class="sum-label">Efectivo en caja</span><span class="sum-val" id="res-efectivo">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STOCK TABLE + ALERTAS + CATEGORÍAS -->
+      <div class="grid-2">
+        <div class="panel" style="overflow:hidden">
+          <div class="dash-filter-row">
+            <input class="fi" type="text" id="dash-stock-search" placeholder="🔍 Buscar producto o SKU…" style="flex:1;max-width:240px">
+            <select class="fi" id="dash-cat-sel"></select>
+            <button class="fchip on" id="fchip-todos">Todos (<span id="count-todos">—</span>)</button>
+            <button class="fchip red" id="fchip-criticos">⚠ Críticos (<span id="count-criticos">—</span>)</button>
+            <button class="fchip" id="fchip-sinstk">Sin stock (<span id="count-sin">—</span>)</button>
+            <div style="margin-left:auto">
+              <a href="inventario.html" class="btn btn-ghost btn-sm">Ver todos →</a>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="dash-table">
               <thead>
                 <tr>
                   <th>Producto</th>
-                  <th>SKU</th>
-                  <th>Stock actual</th>
-                  <th>Mínimo</th>
                   <th>Categoría</th>
+                  <th>Stock</th>
+                  <th>Mínimo</th>
+                  <th>P. Venta</th>
+                  <th>Margen</th>
+                  <th>Vendidos/mes</th>
                 </tr>
               </thead>
-              <tbody id="stock-crit-tbody">
-                <tr><td colspan="5" class="loading"><div class="spinner"></div> Cargando...</td></tr>
+              <tbody id="dash-stock-tbody">
+                <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">Cargando…</td></tr>
               </tbody>
             </table>
           </div>
-        </div>
-
-        <!-- Top productos del mes -->
-        <div class="card">
-          <div class="card-title">Top productos del mes</div>
-          <div id="top-productos">
-            <div class="loading"><div class="spinner"></div></div>
+          <div class="dash-pagination">
+            <span id="dash-stock-info">—</span>
+            <div style="display:flex;gap:4px">
+              <button class="btn btn-ghost btn-sm" id="dash-pg-prev">‹</button>
+              <button class="btn btn-ghost btn-sm" id="dash-pg-next">›</button>
+            </div>
           </div>
         </div>
 
-        <!-- Centro de alertas -->
-        <div class="card">
-          <div class="card-title">Centro de alertas</div>
-          <div id="alertas-container">
-            <div class="loading"><div class="spinner"></div></div>
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <div class="panel-title">Alertas activas</div>
+                <div class="panel-sub">Requieren atención</div>
+              </div>
+              <span class="badge b-red" id="alertas-count" style="display:none"></span>
+            </div>
+            <div class="panel-body panel-body-flush" id="alertas-container">
+              <div style="padding:16px 0;text-align:center;color:var(--text-3)">Cargando…</div>
+            </div>
           </div>
-        </div>
 
-        <!-- Accesos rápidos -->
-        <div class="card full" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div>
-            <div class="card-title">Actualización rápida de precios</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Aplicá un % de aumento a toda una categoría</p>
-            <a href="precios.html" class="btn btn-amber btn-full">🏷️ Ir a Precios</a>
-          </div>
-          <div>
-            <div class="card-title">Subir factura</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Registrá facturas de proveedores</p>
-            <a href="facturas.html" class="btn btn-secondary btn-full">🧾 Ir a Facturas</a>
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <div class="panel-title">Ventas por categoría</div>
+                <div class="panel-sub" id="cat-periodo">Este mes</div>
+              </div>
+            </div>
+            <div class="panel-body" id="ventas-categorias">
+              <div style="text-align:center;color:var(--text-3)">Cargando…</div>
+            </div>
           </div>
         </div>
       </div>
+
     </main>
   </div>
 
-  <!-- Bottom nav mobile -->
   <nav class="bottom-nav">
     <a href="pos.html"><span class="icon">🛒</span>POS</a>
     <a href="caja.html"><span class="icon">💰</span>Caja</a>
@@ -206,12 +249,11 @@
     <a href="reportes.html"><span class="icon">📈</span>Reportes</a>
   </nav>
 
-  <!-- Popup caja no abierta -->
   <div class="modal-overlay hidden" id="modal-caja-dash">
     <div class="modal" style="max-width:380px;text-align:center">
       <div style="font-size:44px;margin-bottom:12px">💰</div>
       <div class="modal-title" style="margin-bottom:8px">Caja no abierta</div>
-      <p style="color:var(--text-muted);font-size:13px;margin-bottom:24px">No hay caja abierta para hoy. ¿Abrimos?</p>
+      <p style="color:var(--text-3);font-size:13px;margin-bottom:24px">No hay caja abierta para hoy. ¿Abrimos?</p>
       <div style="display:flex;gap:10px;justify-content:center">
         <a href="caja.html" class="btn btn-primary">💰 Ir a Caja</a>
         <button class="btn btn-secondary" id="btn-ignorar-caja">Ahora no</button>
@@ -219,34 +261,19 @@
     </div>
   </div>
 
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const sidebar   = document.getElementById('sidebar');
+    const overlay   = document.getElementById('sidebar-overlay');
+    hamburger.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('open'); });
+    overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('open'); });
+    const h = new Date().getHours();
+    document.getElementById('saludo-texto').textContent =
+      (h>=5&&h<12?'Buenos días':h>=12&&h<20?'Buenas tardes':'Buenas noches') + ', Sil y Lore 👋';
+  </script>
+
   <script type="module" src="js/common.js"></script>
   <script type="module" src="js/theme.js"></script>
   <script type="module" src="js/index.js"></script>
-  <script>
-    // Hamburger
-    const hamburger = document.getElementById('hamburger');
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
-    hamburger.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
-      overlay.classList.toggle('open');
-    });
-    overlay.addEventListener('click', () => {
-      sidebar.classList.remove('open');
-      overlay.classList.remove('open');
-    });
-    // Saludo y fecha
-    const hora = new Date().getHours();
-    const saludo = hora >= 5 && hora < 12 ? 'Buen día' : hora >= 12 && hora < 19 ? 'Buenas tardes' : 'Buenas noches';
-    document.getElementById('saludo-texto').textContent = `${saludo}, Sil y Lore 👋`;
-    function actualizarFechaHora() {
-      const ahora = new Date();
-      const fecha = ahora.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-      const hora = ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-      document.getElementById('fecha-hoy').textContent = `${fecha} · ${hora}`;
-    }
-    actualizarFechaHora();
-    setInterval(actualizarFechaHora, 60000);
-  </script>
 </body>
 </html>

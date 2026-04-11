@@ -24,10 +24,10 @@ function injectTopbar() {
       <div class="topbar-sub">${fecha.charAt(0).toUpperCase() + fecha.slice(1)}</div>
     </div>
     <div id="topbar-caja" style="margin-left:16px"></div>
-    <div id="topbar-ventas-hoy" class="topbar-stat" style="display:none"></div>
     <div class="topbar-right">
+      <div id="topbar-ventas-hoy" class="header-info" style="display:none"></div>
       <div class="topbar-search">🔍 Buscar producto, SKU…</div>
-      <a href="reportes.html" class="btn btn-ghost btn-sm" title="Exportar reportes">⬇ Exportar</a>
+      <a href="reportes.html" class="btn btn-ghost btn-sm">⬇ Exportar</a>
       <a href="pos.html" class="btn btn-primary btn-sm">+ Registrar venta</a>
       <button id="theme-toggle" class="theme-toggle-btn" title="Cambiar tema">🌙</button>
     </div>`;
@@ -62,7 +62,9 @@ async function cargarTopbarStats() {
     const tickets = (ventas || []).length;
     if (tickets > 0 || total > 0) {
       el.style.display = '';
-      el.innerHTML = `<div class="topbar-stat-val">${formatMoney(total)}</div><div class="topbar-stat-lbl">Ventas hoy · ${tickets} ticket${tickets !== 1 ? 's' : ''}</div>`;
+      el.innerHTML = `
+        <div class="hi-item">Ventas hoy <strong>${tickets} ticket${tickets !== 1 ? 's' : ''}</strong></div>
+        <div class="hi-item">Facturado <strong style="color:var(--green)">${formatMoney(total)}</strong></div>`;
     }
   } catch {}
 }
@@ -124,7 +126,7 @@ function updateSidebarLogo() {
   if (!logo || logo.querySelector('.logo-icon')) return; // ya actualizado
   logo.innerHTML = `
     <img src="img/logo.jpg" alt="Ortopedia Caseros"
-      style="height:32px;width:auto;object-fit:contain;border-radius:4px">`;
+      style="height:44px;width:auto;max-width:180px;object-fit:contain;border-radius:4px">`;
 }
 
 // ── User card ─────────────────────────────────────────────

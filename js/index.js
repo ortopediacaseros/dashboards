@@ -1,308 +1,386 @@
 import { supabase, formatMoney } from './supabase.js';
 import { checkAuth } from './auth.js';
 
+const SENSITIVE = ['kpi-ventas-hoy', 'kpi-ventas-mes', 'kpi-ganancia'];
+const valorReal = {};
+let hidden = sessionStorage.getItem('kpi_hidden') !== 'false';
+
+const PER_PAGE = 10;
+let stockData = [];
+let ventasMes = [];
+let filtroStock = '';
+let filtroTexto = '';
+let filtroCat   = '';
+let pagina = 0;
+
 async function init() {
   const session = await checkAuth();
   if (!session) return;
 
-  await Promise.all([
-    cargarKPIs(),
-    cargarStockCritico(),
-    cargarTopProductos(),
-    cargarAlertas(),
-    cargarClima(),
-    verificarCaja(),
-  ]);
+  applyKpiVisibility(hidden);
 
-  // Realtime
-  supabase.channel('dash-cambios')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'ventas' }, () => {
-      cargarKPIs();
-    })
+  document.getElementById('eye-btn').addEventListener('click', () => {
+    hidden = !hidden;
+    sessionStorage.setItem('kpi_hidden', String(hidden));
+    applyKpiVisibility(hidden);
+  });
+
+  const hoy = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
+  document.getElementById('resumen-fecha').textContent = hoy + ' · cierre parcial';
+
+  const mes = new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+  document.getElementById('chart-title').textContent =
+    'Ventas — ' + mes.charAt(0).toUpperCase() + mes.slice(1);
+  document.getElementById('cat-periodo').textContent =
+    mes.charAt(0).toUpperCase() + mes.slice(1);
+
+  await Promise.all([cargarKPIs(), cargarStockTable(), cargarAlertas(), cargarCategorias(), verificarCaja()]);
+
+  bindStockFilters();
+
+  supabase.channel('dash')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ventas' }, cargarKPIs)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, () => {
-      cargarStockCritico();
-      cargarKPIs();
-      cargarAlertas();
+      cargarStockTable(); cargarKPIs(); cargarAlertas();
     })
     .subscribe();
 }
 
-async function cargarKPIs() {
-  const hoy = new Date().toISOString().split('T')[0];
-  const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-
-  // Ventas hoy
-  const { data: ventasHoy } = await supabase
-    .from('ventas')
-    .select('total')
-    .gte('fecha', hoy + 'T00:00:00')
-    .lte('fecha', hoy + 'T23:59:59');
-
-  const totalHoy = (ventasHoy || []).reduce((s, v) => s + Number(v.total), 0);
-  document.getElementById('kpi-ventas-hoy').textContent = formatMoney(totalHoy);
-  document.getElementById('kpi-tickets-hoy').textContent = `${(ventasHoy || []).length} ticket${(ventasHoy || []).length !== 1 ? 's' : ''}`;
-
-  // Ventas del mes
-  const { data: ventasMes } = await supabase
-    .from('ventas')
-    .select('total')
-    .gte('fecha', inicioMes);
-
-  const totalMes = (ventasMes || []).reduce((s, v) => s + Number(v.total), 0);
-  document.getElementById('kpi-ventas-mes').textContent = formatMoney(totalMes);
-  document.getElementById('kpi-tickets-mes').textContent = `${(ventasMes || []).length} ticket${(ventasMes || []).length !== 1 ? 's' : ''}`;
-
-  // Ganancia hoy (necesita items_venta con precio_costo)
-  const { data: itemsHoy } = await supabase
-    .from('items_venta')
-    .select('cantidad, precio_unitario, subtotal, producto_id, productos(precio_costo)')
-    .gte('created_at', hoy + 'T00:00:00');
-
-  if (itemsHoy) {
-    const ganancia = itemsHoy.reduce((s, item) => {
-      const costo = item.productos?.precio_costo || 0;
-      return s + (Number(item.precio_unitario) - Number(costo)) * item.cantidad;
-    }, 0);
-    document.getElementById('kpi-ganancia-hoy').textContent = formatMoney(ganancia);
-    const margen = totalHoy > 0 ? Math.round((ganancia / totalHoy) * 100) : 0;
-    document.getElementById('kpi-margen-hoy').textContent = `margen ${margen}%`;
-  }
-
-  // Stock crítico count (Supabase no soporta filtro columna vs columna, se hace en JS)
-  const { data: prods } = await supabase
-    .from('productos')
-    .select('stock_actual, stock_minimo')
-    .eq('activo', true);
-  const crit = (prods || []).filter(p => p.stock_actual <= p.stock_minimo).length;
-  document.getElementById('kpi-stock-crit').textContent = crit;
-
-  // Gráfico barras del mes
-  cargarGraficoMes(ventasMes || []);
-
-  // Breakdown por medio de pago hoy
-  const { data: ventasHoyFull } = await supabase
-    .from('ventas')
-    .select('total, medio_pago')
-    .gte('fecha', hoy + 'T00:00:00')
-    .lte('fecha', hoy + 'T23:59:59');
-
-  renderBreakdownPago(ventasHoyFull || []);
+function applyKpiVisibility(hide) {
+  SENSITIVE.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = hide ? '••••••' : (valorReal[id] || '—');
+  });
+  const btn = document.getElementById('eye-btn');
+  if (btn) btn.textContent = hide ? '👁' : '👁‍🗨';
 }
 
-function cargarGraficoMes(ventas) {
-  const hoy = new Date();
-  const año = hoy.getFullYear();
-  const mes = hoy.getMonth();
-  const diasEnMes = new Date(año, mes + 1, 0).getDate();
-  const diaHoy = hoy.getDate();
+async function cargarKPIs() {
+  const hoy  = new Date().toISOString().split('T')[0];
+  const ayer = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
 
-  // Agrupar ventas por día
-  const porDia = {};
-  ventas.forEach(v => {
-    const dia = new Date(v.fecha).getDate();
-    porDia[dia] = (porDia[dia] || 0) + Number(v.total);
+  const [{ data: vHoy }, { data: vAyer }, { data: vMes }, { data: itemsHoy }] = await Promise.all([
+    supabase.from('ventas').select('total,medio_pago').gte('fecha', hoy+'T00:00:00').lte('fecha', hoy+'T23:59:59'),
+    supabase.from('ventas').select('total').gte('fecha', ayer+'T00:00:00').lte('fecha', ayer+'T23:59:59'),
+    supabase.from('ventas').select('total,fecha').gte('fecha', inicioMes),
+    supabase.from('items_venta').select('cantidad,precio_unitario,subtotal,producto_id,productos(nombre,precio_costo,categoria)').gte('created_at', hoy+'T00:00:00'),
+  ]);
+
+  ventasMes = vMes || [];
+  const totalHoy  = (vHoy || []).reduce((s, v) => s + Number(v.total), 0);
+  const totalAyer = (vAyer || []).reduce((s, v) => s + Number(v.total), 0);
+  const totalMes  = ventasMes.reduce((s, v) => s + Number(v.total), 0);
+  const ticketsHoy = (vHoy || []).length;
+  const ticketsMes = ventasMes.length;
+
+  let costoHoy = 0, gananciaBruta = 0;
+  const prodQty = {};
+  let topProdNombre = '—', topProdQty = 0;
+  const mediosPago = {};
+
+  (itemsHoy || []).forEach(it => {
+    const c = Number(it.productos?.precio_costo || 0) * it.cantidad;
+    costoHoy += c;
+    gananciaBruta += (Number(it.precio_unitario) - Number(it.productos?.precio_costo || 0)) * it.cantidad;
+    const pid = it.producto_id, nom = it.productos?.nombre || '';
+    prodQty[pid] = (prodQty[pid] || { nom, qty: 0 });
+    prodQty[pid].qty += it.cantidad;
+    if (prodQty[pid].qty > topProdQty) { topProdQty = prodQty[pid].qty; topProdNombre = nom; }
   });
 
-  const valores = Array.from({ length: diasEnMes }, (_, i) => porDia[i + 1] || 0);
-  const max = Math.max(...valores, 1);
+  (vHoy || []).forEach(v => {
+    const mp = v.medio_pago || 'otro';
+    mediosPago[mp] = (mediosPago[mp] || 0) + Number(v.total);
+  });
+
+  const margenHoy = totalHoy > 0 ? Math.round((gananciaBruta / totalHoy) * 100) : 0;
+  const deltaHoy = totalAyer > 0 ? ((totalHoy - totalAyer) / totalAyer * 100).toFixed(1) : null;
+
+  valorReal['kpi-ventas-hoy'] = formatMoney(totalHoy);
+  valorReal['kpi-ventas-mes'] = formatMoney(totalMes);
+  valorReal['kpi-ganancia']   = formatMoney(gananciaBruta);
+
+  applyKpiVisibility(hidden);
+
+  const subHoy = deltaHoy !== null
+    ? `<span class="change ${Number(deltaHoy) >= 0 ? 'ch-up' : 'ch-dn'}">${Number(deltaHoy) >= 0 ? '▲' : '▼'} ${Math.abs(deltaHoy)}%</span> vs ayer`
+    : `${ticketsHoy} ticket${ticketsHoy !== 1 ? 's' : ''}`;
+  document.getElementById('kpi-sub-hoy').innerHTML = subHoy;
+  document.getElementById('kpi-sub-mes').textContent = `${ticketsMes} tickets este mes`;
+  document.getElementById('kpi-sub-margen').textContent = `Margen promedio ${margenHoy}%`;
+  document.getElementById('kpi-tickets-mes').textContent = ticketsMes;
+  document.getElementById('kpi-sub-tickets').textContent = 'Este mes';
+
+  const { data: prods } = await supabase.from('productos').select('stock_actual,stock_minimo').eq('activo', true);
+  const critCount = (prods || []).filter(p => p.stock_actual <= p.stock_minimo).length;
+  document.getElementById('kpi-stock-crit').textContent = critCount;
+
+  cargarGrafico(ventasMes);
+  cargarResumenDia({ totalHoy, ticketsHoy, costoHoy, gananciaBruta, margenHoy, mediosPago, topProdNombre, topProdQty });
+}
+
+function cargarGrafico(ventas) {
+  const hoy = new Date();
+  const año = hoy.getFullYear(), mes = hoy.getMonth(), diaHoy = hoy.getDate();
+  const diasMes = new Date(año, mes + 1, 0).getDate();
+  const porDia = {};
+  ventas.forEach(v => { const d = new Date(v.fecha).getDate(); porDia[d] = (porDia[d] || 0) + Number(v.total); });
+  const vals = Array.from({ length: diasMes }, (_, i) => porDia[i + 1] || 0);
+  const maxVal = Math.max(...vals, 1);
+  const diasConVentas = vals.filter(v => v > 0).length || 1;
+  const totalAcum = vals.reduce((s, v) => s + v, 0);
+  const promedio = totalAcum / diasConVentas;
+  const proyeccion = promedio * diasMes;
+
+  let mejorDia = 1, mejorMonto = 0;
+  vals.forEach((v, i) => { if (v > mejorMonto) { mejorMonto = v; mejorDia = i + 1; } });
+  const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+  document.getElementById('cf-mejor-dia').textContent = `${mejorDia} ${meses[mes]}`;
+  document.getElementById('cf-mejor-monto').textContent = formatMoney(mejorMonto);
+  document.getElementById('cf-promedio').textContent = formatMoney(promedio);
+  document.getElementById('cf-dias-habil').textContent = `${diasConVentas} día${diasConVentas !== 1 ? 's' : ''}`;
+  document.getElementById('cf-proyeccion').textContent = formatMoney(proyeccion);
+  document.getElementById('cf-proy-delta').textContent = proyeccion > totalAcum ? '▲ proyectado' : '≈ en curso';
 
   const container = document.getElementById('bar-chart-mes');
-  container.innerHTML = valores.map((v, i) => {
-    const dia = i + 1;
-    const pct = Math.round((v / max) * 100);
-    const esHoy = dia === diaHoy;
-    return `
-      <div class="bar-month-item" title="${dia}/${mes + 1}: ${formatMoney(v)}">
-        <div class="bar-month-fill ${esHoy ? 'today' : ''}" style="height:${pct}%"></div>
-        ${dia % 5 === 1 || dia === diasEnMes ? `<div class="bar-month-label">${dia}</div>` : '<div class="bar-month-label"></div>'}
-      </div>`;
+  container.innerHTML = vals.map((v, i) => {
+    const d = i + 1, pct = Math.round((v / maxVal) * 100);
+    return `<div class="bc-col" title="${d}/${mes+1}: ${formatMoney(v)}">
+      <div class="bc-bar${d === diaHoy ? ' today' : ''}" style="height:${pct}%"></div>
+      <div class="bc-label">${d % 5 === 1 || d === diasMes ? d : ''}</div>
+    </div>`;
   }).join('');
 }
 
-function renderBreakdownPago(ventas) {
-  const grupos = { efectivo: 0, debito: 0, credito: 0, transferencia: 0 };
-  const etiquetas = { efectivo: '💵 Efectivo', debito: '💳 Débito', credito: '🟣 Crédito', transferencia: '📲 Transferencia' };
-  ventas.forEach(v => { grupos[v.medio_pago] = (grupos[v.medio_pago] || 0) + Number(v.total); });
+function cargarResumenDia({ totalHoy, ticketsHoy, costoHoy, gananciaBruta, margenHoy, mediosPago, topProdNombre, topProdQty }) {
+  document.getElementById('res-tickets').textContent   = ticketsHoy;
+  document.getElementById('res-facturado').textContent = formatMoney(totalHoy);
+  document.getElementById('res-costo').textContent     = formatMoney(costoHoy);
+  document.getElementById('res-ganancia').textContent  = formatMoney(gananciaBruta);
+  document.getElementById('res-margen').textContent    = margenHoy + '%';
+  document.getElementById('res-top-prod').textContent  = topProdQty > 0 ? `${topProdNombre} (${topProdQty}u.)` : '—';
 
-  const el = document.getElementById('breakdown-pago');
-  const total = Object.values(grupos).reduce((s, v) => s + v, 0);
-
-  if (total === 0) {
-    el.innerHTML = '<div class="empty-state" style="padding:20px"><div class="icon">📭</div>Sin ventas hoy</div>';
-    return;
+  const mpLabels = { efectivo: ['b-green','Efect.'], debito: ['b-blue','Déb.'], credito: ['b-purple','Créd.'], transferencia: ['b-blue','Transf.'] };
+  const mediosEl = document.getElementById('res-medios-pago');
+  if (Object.keys(mediosPago).length === 0) {
+    mediosEl.innerHTML = '<span style="color:var(--text-3);font-size:12px">Sin ventas</span>';
+  } else {
+    mediosEl.innerHTML = Object.entries(mediosPago)
+      .sort((a, b) => b[1] - a[1])
+      .map(([mp, val]) => {
+        const [cls, lbl] = mpLabels[mp] || ['b-gray', mp];
+        const k = val >= 1000 ? `$${Math.round(val/1000)}k` : formatMoney(val);
+        return `<span class="badge ${cls}">${lbl} ${k}</span>`;
+      }).join('');
   }
-
-  el.innerHTML = Object.entries(grupos).map(([medio, monto]) => {
-    if (monto === 0) return '';
-    const pct = total > 0 ? Math.round((monto / total) * 100) : 0;
-    return `
-      <div class="pay-row">
-        <span>${etiquetas[medio]}</span>
-        <span style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:11px;color:var(--text-dim)">${pct}%</span>
-          <span style="font-weight:600">${formatMoney(monto)}</span>
-        </span>
-      </div>`;
-  }).join('');
 }
 
-async function cargarStockCritico() {
-  const { data } = await supabase
-    .from('productos')
-    .select('*')
-    .eq('activo', true)
-    .order('stock_actual');
-
-  const criticos = (data || []).filter(p => p.stock_actual <= p.stock_minimo);
-  const tbody = document.getElementById('stock-crit-tbody');
-
-  if (criticos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--green)">✅ Sin productos en stock crítico</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = criticos.map(p => `
-    <tr>
-      <td><div style="font-weight:500">${p.nombre}</div></td>
-      <td style="font-size:12px;color:var(--text-muted)">${p.sku}</td>
-      <td><span class="stock-crit">${p.stock_actual}</span></td>
-      <td style="color:var(--text-muted)">${p.stock_minimo}</td>
-      <td><span class="badge badge-red">${p.categoria}</span></td>
-    </tr>`).join('');
-}
-
-async function cargarTopProductos() {
+async function cargarStockTable() {
   const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+  const [{ data: prods }, { data: items }] = await Promise.all([
+    supabase.from('productos').select('id,nombre,sku,categoria,stock_actual,stock_minimo,precio_venta,precio_costo').eq('activo', true).order('stock_actual'),
+    supabase.from('items_venta').select('producto_id,cantidad').gte('created_at', inicioMes),
+  ]);
 
-  const { data } = await supabase
-    .from('items_venta')
-    .select('producto_id, cantidad, subtotal, productos(nombre)')
-    .gte('created_at', inicioMes);
+  const vendidosMes = {};
+  (items || []).forEach(it => { vendidosMes[it.producto_id] = (vendidosMes[it.producto_id] || 0) + it.cantidad; });
 
-  const el = document.getElementById('top-productos');
+  stockData = (prods || []).map(p => ({ ...p, vendidos: vendidosMes[p.id] || 0 }));
 
-  if (!data || data.length === 0) {
-    el.innerHTML = '<div class="empty-state" style="padding:20px"><div class="icon">📭</div>Sin datos este mes</div>';
+  const cats = [...new Set(stockData.map(p => p.categoria))].sort();
+  const sel = document.getElementById('dash-cat-sel');
+  sel.innerHTML = '<option value="">Todas las categorías</option>' +
+    cats.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  actualizarCounts();
+  renderStockTable();
+}
+
+function filtrarStock() {
+  let lista = stockData;
+  if (filtroCat)   lista = lista.filter(p => p.categoria === filtroCat);
+  if (filtroTexto) {
+    const q = filtroTexto.toLowerCase();
+    lista = lista.filter(p => p.nombre.toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q));
+  }
+  if (filtroStock === 'critico') lista = lista.filter(p => p.stock_actual <= p.stock_minimo);
+  if (filtroStock === 'sin')     lista = lista.filter(p => p.stock_actual === 0);
+  return lista;
+}
+
+function actualizarCounts() {
+  document.getElementById('count-todos').textContent     = stockData.length;
+  document.getElementById('count-criticos').textContent  = stockData.filter(p => p.stock_actual <= p.stock_minimo).length;
+  document.getElementById('count-sin').textContent       = stockData.filter(p => p.stock_actual === 0).length;
+}
+
+function renderStockTable() {
+  const lista = filtrarStock();
+  const total = lista.length;
+  const inicio = pagina * PER_PAGE;
+  const page = lista.slice(inicio, inicio + PER_PAGE);
+
+  document.getElementById('dash-stock-info').textContent =
+    total === 0 ? 'Sin productos' : `Mostrando ${inicio + 1}–${Math.min(inicio + PER_PAGE, total)} de ${total}`;
+  document.getElementById('dash-pg-prev').disabled = pagina === 0;
+  document.getElementById('dash-pg-next').disabled = inicio + PER_PAGE >= total;
+
+  const catColors = ['b-blue','b-purple','b-amber','b-green','b-gray','b-red'];
+  const catMap = {};
+  [...new Set(stockData.map(p => p.categoria))].sort().forEach((c, i) => { catMap[c] = catColors[i % catColors.length]; });
+
+  const tbody = document.getElementById('dash-stock-tbody');
+  if (page.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">Sin productos</td></tr>`;
     return;
   }
 
-  const agrupado = {};
-  data.forEach(item => {
-    const id = item.producto_id;
-    if (!agrupado[id]) agrupado[id] = { nombre: item.productos?.nombre || 'Desconocido', cantidad: 0, subtotal: 0 };
-    agrupado[id].cantidad += item.cantidad;
-    agrupado[id].subtotal += Number(item.subtotal);
+  tbody.innerHTML = page.map(p => {
+    const margen = p.precio_costo > 0
+      ? Math.round(((p.precio_venta - p.precio_costo) / p.precio_venta) * 100) : 0;
+    const maxS = Math.max(p.stock_actual, p.stock_minimo * 3, 1);
+    const fillPct = Math.min(100, Math.round((p.stock_actual / maxS) * 100));
+    let sColor, fillColor;
+    if (p.stock_actual === 0) { sColor = 'var(--red)'; fillColor = 'var(--red)'; }
+    else if (p.stock_actual <= p.stock_minimo) { sColor = 'var(--red)'; fillColor = 'var(--red)'; }
+    else if (p.stock_actual <= p.stock_minimo * 1.5) { sColor = 'var(--amber)'; fillColor = 'var(--amber)'; }
+    else { sColor = 'var(--green)'; fillColor = 'var(--green)'; }
+
+    return `<tr>
+      <td><div style="font-weight:500">${p.nombre}</div><div class="mono">${p.sku}</div></td>
+      <td><span class="badge ${catMap[p.categoria] || 'b-gray'}">${p.categoria}</span></td>
+      <td><div class="stk"><strong style="color:${sColor};width:24px;text-align:right">${p.stock_actual}</strong><div class="stk-bar"><div class="stk-fill" style="width:${fillPct}%;background:${fillColor}"></div></div></div></td>
+      <td style="color:var(--text-3)">${p.stock_minimo}</td>
+      <td style="font-weight:500">${formatMoney(p.precio_venta)}</td>
+      <td><span class="badge ${margen >= 50 ? 'b-green' : margen >= 30 ? 'b-amber' : 'b-red'}">${margen}%</span></td>
+      <td style="font-weight:600;color:var(--brand)">${p.vendidos > 0 ? p.vendidos + ' u.' : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function bindStockFilters() {
+  document.getElementById('dash-stock-search').addEventListener('input', e => {
+    filtroTexto = e.target.value.trim(); pagina = 0; renderStockTable();
   });
-
-  const top = Object.values(agrupado)
-    .sort((a, b) => b.cantidad - a.cantidad)
-    .slice(0, 5);
-
-  el.innerHTML = top.map((p, i) => `
-    <div class="top-prod-item">
-      <span style="display:flex;align-items:center;gap:8px">
-        <span style="color:var(--text-dim);font-size:12px;width:16px">${i + 1}</span>
-        <span style="font-weight:500">${p.nombre}</span>
-      </span>
-      <span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
-        <span style="font-weight:600;font-size:13px">${formatMoney(p.subtotal)}</span>
-        <span style="font-size:11px;color:var(--text-dim)">${p.cantidad} u.</span>
-      </span>
-    </div>`).join('');
+  document.getElementById('dash-cat-sel').addEventListener('change', e => {
+    filtroCat = e.target.value; pagina = 0; renderStockTable();
+  });
+  ['fchip-todos','fchip-criticos','fchip-sinstk'].forEach(id => {
+    document.getElementById(id).addEventListener('click', function() {
+      document.querySelectorAll('.dash-filter-row .fchip').forEach(c => c.classList.remove('on'));
+      this.classList.add('on');
+      filtroStock = id === 'fchip-todos' ? '' : id === 'fchip-criticos' ? 'critico' : 'sin';
+      pagina = 0; renderStockTable();
+    });
+  });
+  document.getElementById('dash-pg-prev').addEventListener('click', () => { if (pagina > 0) { pagina--; renderStockTable(); } });
+  document.getElementById('dash-pg-next').addEventListener('click', () => { pagina++; renderStockTable(); });
 }
 
 async function cargarAlertas() {
   const alertas = [];
+  const hoy = new Date().toISOString().split('T')[0];
 
-  // Stock crítico
-  const { data: prods } = await supabase
-    .from('productos')
-    .select('nombre, stock_actual, stock_minimo')
-    .eq('activo', true);
+  const [{ data: prods }, { data: caja }, { data: factPend }] = await Promise.all([
+    supabase.from('productos').select('nombre,stock_actual,stock_minimo,categoria').eq('activo', true),
+    supabase.from('cajas').select('estado').eq('fecha', hoy).maybeSingle(),
+    supabase.from('facturas').select('proveedor,total').eq('estado','pendiente').limit(5),
+  ]);
 
   const criticos = (prods || []).filter(p => p.stock_actual <= p.stock_minimo);
-  if (criticos.length > 0) {
-    alertas.push({ tipo: 'red', icono: '⚠️', msg: `${criticos.length} producto${criticos.length > 1 ? 's' : ''} con stock crítico` });
-  }
+  criticos.slice(0, 3).forEach(p => alertas.push({
+    color: 'var(--red)',
+    texto: `<strong>Stock crítico:</strong> ${p.nombre} — ${p.stock_actual} unidad${p.stock_actual !== 1 ? 'es' : ''}`,
+    meta: p.categoria,
+  }));
+  if (criticos.length > 3) alertas.push({
+    color: 'var(--red)',
+    texto: `<strong>Stock crítico:</strong> ${criticos.length - 3} producto${criticos.length - 3 > 1 ? 's' : ''} más`,
+    meta: 'Ver inventario',
+    link: 'inventario.html',
+  });
 
   const bajos = (prods || []).filter(p => p.stock_actual > p.stock_minimo && p.stock_actual <= p.stock_minimo * 1.5);
-  if (bajos.length > 0) {
-    alertas.push({ tipo: 'amber', icono: '📉', msg: `${bajos.length} producto${bajos.length > 1 ? 's' : ''} con stock bajo` });
-  }
+  if (bajos.length > 0) alertas.push({
+    color: 'var(--amber)',
+    texto: `<strong>Stock bajo:</strong> ${bajos.length} producto${bajos.length > 1 ? 's' : ''} próximos al mínimo`,
+    meta: 'Inventario',
+  });
 
-  // Caja del día
-  const hoy = new Date().toISOString().split('T')[0];
-  const { data: caja } = await supabase
-    .from('cajas')
-    .select('estado, efectivo_inicial')
-    .eq('fecha', hoy)
-    .maybeSingle();
+  if (!caja) alertas.push({ color: 'var(--amber)', texto: '<strong>Caja no abierta</strong> hoy', meta: 'Ir a caja', link: 'caja.html' });
 
-  if (!caja) {
-    alertas.push({ tipo: 'amber', icono: '💰', msg: 'Caja no abierta hoy' });
-  } else if (caja.estado === 'abierta') {
-    alertas.push({ tipo: 'teal', icono: '✅', msg: 'Caja abierta — efectivo inicial: ' + formatMoney(caja.efectivo_inicial) });
-  }
+  (factPend || []).forEach(f => alertas.push({
+    color: 'var(--amber)',
+    texto: `<strong>Factura pendiente:</strong> ${f.proveedor || 'Sin proveedor'}${f.total ? ' — ' + formatMoney(f.total) : ''}`,
+    meta: 'Sin procesar',
+    link: 'facturas.html',
+    accion: 'Procesar',
+  }));
 
-  // Alquileres vencidos
-  const hoyDate = new Date(); hoyDate.setHours(0,0,0,0);
-  const { data: alqVenc } = await supabase
-    .from('alquileres')
-    .select('id')
-    .in('estado', ['activo', 'vencido'])
-    .lt('fecha_fin_prevista', hoyDate.toISOString().split('T')[0]);
-  if (alqVenc && alqVenc.length > 0) {
-    alertas.push({ tipo: 'red', icono: '🔄', msg: `${alqVenc.length} alquiler${alqVenc.length > 1 ? 'es' : ''} vencido${alqVenc.length > 1 ? 's' : ''} sin devolver` });
+  const contEl = document.getElementById('alertas-count');
+  if (alertas.length > 0) {
+    contEl.textContent = alertas.length + ' nuevas';
+    contEl.style.display = '';
+  } else {
+    contEl.style.display = 'none';
   }
 
   const el = document.getElementById('alertas-container');
   if (alertas.length === 0) {
-    el.innerHTML = '<div class="empty-state" style="padding:20px"><div class="icon">✅</div>Sin alertas activas</div>';
+    el.innerHTML = `<div style="padding:16px 0;text-align:center;color:var(--green)">✅ Sin alertas activas</div>`;
     return;
   }
-
-  const colorMap = { red: 'var(--red)', amber: 'var(--amber)', teal: 'var(--teal)' };
   el.innerHTML = alertas.map(a => `
     <div class="alert-item">
-      <span style="font-size:16px">${a.icono}</span>
-      <span style="color:${colorMap[a.tipo] || 'var(--text)'}">${a.msg}</span>
+      <div class="alert-dot" style="background:${a.color}"></div>
+      <div style="flex:1;min-width:0">
+        <div class="alert-text">${a.texto}</div>
+        <div class="alert-meta">${a.meta || ''}</div>
+      </div>
+      ${a.link ? `<a href="${a.link}" class="btn btn-ghost btn-sm" style="${a.accion ? 'color:var(--amber)' : ''}">${a.accion || 'Ver'}</a>` : ''}
     </div>`).join('');
 }
 
-async function cargarClima() {
-  try {
-    const resp = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-34.6037&longitude=-58.5631&current_weather=true&timezone=America%2FArgentina%2FBuenos_Aires');
-    const data = await resp.json();
-    const { temperature, weathercode } = data.current_weather;
-    const { emoji, desc } = climaInfo(weathercode);
-    document.getElementById('clima-widget').innerHTML = `
-      <span style="font-size:24px">${emoji}</span>
-      <div>
-        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;color:var(--text);line-height:1">${Math.round(temperature)}°C</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-top:2px">${desc} · Caseros</div>
-      </div>`;
-  } catch (e) {
-    document.getElementById('clima-widget').innerHTML = '';
-  }
-}
+async function cargarCategorias() {
+  const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+  const { data } = await supabase
+    .from('items_venta')
+    .select('subtotal, productos(categoria)')
+    .gte('created_at', inicioMes);
 
-function climaInfo(code) {
-  if (code === 0)             return { emoji: '☀️', desc: 'Despejado' };
-  if (code <= 2)              return { emoji: '🌤️', desc: 'Mayormente despejado' };
-  if (code === 3)             return { emoji: '☁️', desc: 'Nublado' };
-  if (code <= 48)             return { emoji: '🌫️', desc: 'Neblina' };
-  if (code <= 57)             return { emoji: '🌦️', desc: 'Llovizna' };
-  if (code <= 67)             return { emoji: '🌧️', desc: 'Lluvia' };
-  if (code <= 77)             return { emoji: '🌨️', desc: 'Nieve' };
-  if (code <= 82)             return { emoji: '🌦️', desc: 'Lluvioso' };
-  return                             { emoji: '⛈️', desc: 'Tormenta' };
+  const catMap = {};
+  (data || []).forEach(it => {
+    const cat = it.productos?.categoria || 'Otros';
+    catMap[cat] = (catMap[cat] || 0) + Number(it.subtotal || 0);
+  });
+
+  const el = document.getElementById('ventas-categorias');
+  const entries = Object.entries(catMap).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  if (entries.length === 0) {
+    el.innerHTML = '<div style="text-align:center;color:var(--text-3)">Sin ventas este mes</div>';
+    return;
+  }
+
+  const maxVal = entries[0][1];
+  const catFills = ['var(--brand)', 'var(--blue)', 'var(--purple)', 'var(--green)', 'var(--amber)', '#9CA3AF'];
+  el.innerHTML = entries.map(([cat, val], i) => `
+    <div class="progress-item">
+      <div class="progress-header">
+        <span class="progress-label">${cat}</span>
+        <span class="progress-val">${formatMoney(val)}</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:${Math.round((val / maxVal) * 100)}%;background:${catFills[i] || '#9CA3AF'}"></div>
+      </div>
+    </div>`).join('');
 }
 
 async function verificarCaja() {
   const hoy = new Date().toISOString().split('T')[0];
-  const { data: caja } = await supabase
-    .from('cajas').select('id, estado').eq('fecha', hoy).maybeSingle();
-
+  const { data: caja } = await supabase.from('cajas').select('id,estado').eq('fecha', hoy).maybeSingle();
   if (!caja || caja.estado === 'cerrada') {
     document.getElementById('modal-caja-dash').classList.remove('hidden');
     document.getElementById('btn-ignorar-caja').addEventListener('click', () => {
