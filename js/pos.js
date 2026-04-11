@@ -46,7 +46,7 @@ document.getElementById('btn-escanear').addEventListener('click', async () => {
   try {
     await scanner.start();
   } catch (err) {
-    showToast('Error al acceder a la cámara: ' + err.message, 'error');
+    showToast('Error al acceder a la cámara: ' + (err?.message || String(err)), 'error');
     scannerSection.classList.add('hidden');
     document.getElementById('btn-escanear').textContent = '📷 Escanear código';
   }

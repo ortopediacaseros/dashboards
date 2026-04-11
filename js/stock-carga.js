@@ -56,7 +56,7 @@ async function iniciarCamara() {
     btn.disabled = false;
     btn.textContent = '⏹ Detener cámara';
   } catch (err) {
-    showToast('No se pudo acceder a la cámara: ' + err.message, 'error');
+    showToast('No se pudo acceder a la cámara: ' + (err?.message || String(err)), 'error');
     btn.disabled = false;
     btn.textContent = '📷 Iniciar cámara';
   }
