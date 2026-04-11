@@ -47,13 +47,11 @@ async function iniciarCamara() {
   btn.textContent = 'Iniciando...';
 
   try {
-    scanner = new Scanner('video-preview', onCodigoDetectado);
+    scanner = new Scanner('scanner-container', onCodigoDetectado);
     await scanner.start();
 
     document.getElementById('cam-placeholder').style.display = 'none';
-    document.getElementById('video-preview').style.display = 'block';
-    document.getElementById('scan-overlay').style.display = 'flex';
-    document.getElementById('scan-status').style.display = 'block';
+    document.getElementById('scanner-container').style.display = 'block';
     camaraActiva = true;
     btn.disabled = false;
     btn.textContent = '⏹ Detener cámara';
@@ -66,31 +64,27 @@ async function iniciarCamara() {
 
 function detenerCamara() {
   if (scanner) { scanner.stop(); scanner = null; }
-  document.getElementById('video-preview').style.display = 'none';
-  document.getElementById('scan-overlay').style.display = 'none';
-  document.getElementById('scan-status').style.display = 'none';
+  document.getElementById('scanner-container').style.display = 'none';
   document.getElementById('cam-placeholder').style.display = 'block';
-  document.getElementById('cam-placeholder').textContent = 'Cámara detenida.';
+  document.getElementById('cam-placeholder').textContent = '📷 Cámara detenida. Presioná "Iniciar cámara" para volver a escanear.';
   document.getElementById('btn-cam').textContent = '📷 Iniciar cámara';
   camaraActiva = false;
   pausada = false;
 }
 
 function pausarCamara() {
-  if (scanner && camaraActiva) {
+  if (scanner && camaraActiva && !pausada) {
     scanner.stop();
     pausada = true;
-    document.getElementById('scan-status').textContent = 'En pausa';
   }
 }
 
 async function reanudarCamara() {
   if (!camaraActiva || !pausada) return;
   try {
-    scanner = new Scanner('video-preview', onCodigoDetectado);
+    scanner = new Scanner('scanner-container', onCodigoDetectado);
     await scanner.start();
     pausada = false;
-    document.getElementById('scan-status').textContent = 'Escaneando...';
   } catch {}
 }
 

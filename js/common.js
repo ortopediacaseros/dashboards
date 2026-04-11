@@ -1,4 +1,94 @@
-import { supabase, formatMoney } from './supabase.js';
+import { supabase, formatMoney, getCajaHoy } from './supabase.js';
+
+// ── Topbar ────────────────────────────────────────────────
+function getPageTitle() {
+  const h1 = document.querySelector('.page-header h1, h1');
+  if (h1) return h1.textContent.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+  return document.title.split(' —')[0].trim();
+}
+
+function injectTopbar() {
+  if (!document.querySelector('.sidebar')) return;
+
+  const fecha = new Date().toLocaleDateString('es-AR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  });
+  const title = getPageTitle();
+
+  const bar = document.createElement('div');
+  bar.className = 'topbar';
+  bar.id = 'main-topbar';
+  bar.innerHTML = `
+    <div>
+      <div class="topbar-title">${title}</div>
+      <div class="topbar-sub">${fecha.charAt(0).toUpperCase() + fecha.slice(1)}</div>
+    </div>
+    <div id="topbar-caja" style="margin-left:16px"></div>
+    <div class="topbar-right">
+      <div class="topbar-search">🔍 Buscar producto, SKU…</div>
+      <a href="pos.html" class="btn btn-primary btn-sm">+ Registrar venta</a>
+      <button id="theme-toggle" class="theme-toggle-btn" title="Cambiar tema">🌙</button>
+    </div>`;
+  document.body.prepend(bar);
+}
+
+async function cargarEstadoCaja() {
+  const el = document.getElementById('topbar-caja');
+  if (!el) return;
+  try {
+    const { data: caja } = await getCajaHoy();
+    if (caja && caja.estado === 'abierta') {
+      const hora = new Date(caja.created_at || Date.now()).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+      el.innerHTML = `<div class="caja-open"><div class="caja-dot"></div>Caja abierta desde las ${hora}</div>`;
+    }
+  } catch {}
+}
+
+// ── Sidebar logo update ───────────────────────────────────
+function updateSidebarLogo() {
+  const logo = document.querySelector('.sidebar .logo');
+  if (!logo || logo.querySelector('.logo-icon')) return; // ya actualizado
+  logo.innerHTML = `
+    <img src="img/logo.webp" alt="Ortopedia Caseros"
+      style="height:36px;width:auto;object-fit:contain;border-radius:4px">`;
+}
+
+// ── User card ─────────────────────────────────────────────
+async function injectUserCard() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar || sidebar.querySelector('.sidebar-bottom')) return;
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+
+  const email = session.user.email || '';
+  const initials = email.slice(0, 2).toUpperCase();
+
+  const bottom = document.createElement('div');
+  bottom.className = 'sidebar-bottom';
+  bottom.innerHTML = `
+    <div class="user-card">
+      <div class="user-av">${initials}</div>
+      <div>
+        <div class="user-name">${email.split('@')[0]}</div>
+        <div class="user-role">Administrador</div>
+      </div>
+    </div>`;
+  sidebar.appendChild(bottom);
+}
+
+// ── Sidebar nav: wrap .sidebar a content in nav-icon spans ─
+function updateSidebarNav() {
+  document.querySelectorAll('.sidebar a').forEach(link => {
+    if (link.querySelector('.nav-icon')) return;
+    const text = link.textContent.trim();
+    // Separar emoji del texto
+    const match = text.match(/^([\u{1F300}-\u{1FAFF}\u{1F000}-\u{1F0FF}\u{2600}-\u{27BF}\uFE0F\u{1FA00}-\u{1FA9F}]+)\s*(.*)$/u);
+    if (match) {
+      link.innerHTML = `<span class="nav-icon">${match[1]}</span>${match[2]}`;
+    }
+  });
+}
 
 // ── Sidebar search ────────────────────────────────────────
 function injectSidebarSearch() {
@@ -9,11 +99,13 @@ function injectSidebarSearch() {
   wrap.className = 'sidebar-search-wrap';
   wrap.innerHTML = `
     <input type="text" class="input sidebar-search-input" id="sidebar-search"
-      placeholder="🔍 Buscar producto..." autocomplete="off">
+      placeholder="🔍 Buscar…" autocomplete="off">
     <div id="sidebar-search-results" class="sidebar-search-results"></div>`;
 
+  // Insertar después del logo
   const logo = sidebar.querySelector('.logo');
-  logo ? logo.insertAdjacentElement('afterend', wrap) : sidebar.prepend(wrap);
+  if (logo) logo.insertAdjacentElement('afterend', wrap);
+  else sidebar.prepend(wrap);
 
   const input = wrap.querySelector('#sidebar-search');
   const results = document.getElementById('sidebar-search-results');
@@ -39,16 +131,16 @@ async function runSearch(q, resultsEl) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return;
 
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from('productos')
-    .select('nombre, sku, ean, precio_venta, stock_actual, stock_minimo, categoria')
+    .select('nombre, sku, precio_venta, stock_actual, stock_minimo, categoria')
     .eq('activo', true)
-    .or(`nombre.ilike.%${q}%,sku.ilike.%${q}%,ean.ilike.%${q}%`)
+    .or(`nombre.ilike.%${q}%,sku.ilike.%${q}%`)
     .order('nombre')
     .limit(10);
 
-  if (error || !data || !data.length) {
-    resultsEl.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-3)">Sin resultados</div>';
+  if (!data || !data.length) {
+    resultsEl.innerHTML = '<div style="padding:12px 16px;font-size:12px;color:var(--text-3)">Sin resultados</div>';
     resultsEl.style.display = 'block';
     return;
   }
@@ -60,15 +152,21 @@ async function runSearch(q, resultsEl) {
     return `
       <div class="sidebar-result-item">
         <div style="min-width:0">
-          <div style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre}</div>
-          <div style="font-size:11px;color:var(--text-4)">${p.categoria}</div>
+          <div style="font-weight:500;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.nombre}</div>
+          <div class="mono">${p.categoria}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;padding-left:8px">
-          <div style="font-weight:700;color:var(--brand);white-space:nowrap">${formatMoney(p.precio_venta)}</div>
-          <div class="${dot}" style="font-size:11px;white-space:nowrap">${p.stock_actual} u.</div>
+          <div style="font-weight:700;color:var(--brand)">${formatMoney(p.precio_venta)}</div>
+          <div class="${dot}" style="font-size:11px">${p.stock_actual} u.</div>
         </div>
       </div>`;
   }).join('');
 }
 
+// ── Init ─────────────────────────────────────────────────
+injectTopbar();
+updateSidebarLogo();
+updateSidebarNav();
 injectSidebarSearch();
+cargarEstadoCaja();
+injectUserCard();

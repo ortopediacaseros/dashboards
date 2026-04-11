@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Carga de Stock — Ortopedia Caseros</title>
   <script>if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');</script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <link rel="stylesheet" href="css/styles.css">
   <style>
     .scan-area {
@@ -156,15 +157,10 @@
 
           <!-- Scanner -->
           <div class="scan-area" id="scan-area">
-            <div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px" id="cam-placeholder">
-              Cámara no iniciada. Presioná "Iniciar cámara" para comenzar.
+            <div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px" id="cam-placeholder">
+              📷 Presioná "Iniciar cámara" para comenzar a escanear
             </div>
-            <video id="video-preview" style="display:none" autoplay muted playsinline></video>
-            <div class="scan-overlay" id="scan-overlay" style="display:none">
-              <div class="scan-frame"></div>
-              <div class="scan-line"></div>
-            </div>
-            <div class="scan-status" id="scan-status" style="display:none">Escaneando...</div>
+            <div id="scanner-container" style="display:none"></div>
             <div class="cam-controls">
               <button class="btn btn-primary" id="btn-cam" style="flex:1">📷 Iniciar cámara</button>
               <button class="btn btn-secondary" id="btn-sin-codigo" style="flex:1">📝 Sin código</button>
