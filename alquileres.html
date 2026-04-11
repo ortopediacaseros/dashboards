@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alquileres — Ortopedia Caseros</title>
+  <script>if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');</script>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .alq-estado-activo   { color: var(--green);  background: var(--green-bg);  }
+    .alq-estado-vencido  { color: var(--red);    background: var(--red-bg);    }
+    .alq-estado-devuelto { color: var(--text-3); background: var(--surface-2); }
+    .dias-badge {
+      display: inline-flex; align-items: center;
+      font-size: 11px; font-weight: 600;
+      padding: 2px 8px; border-radius: 10px;
+    }
+    .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+  </style>
+</head>
+<body>
+  <button class="hamburger" id="hamburger">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="logo">🦴 Ortopedia Caseros</div>
+      <a href="index.html">📊 Dashboard</a>
+      <a href="pos.html">🛒 POS / Venta</a>
+      <a href="caja.html">💰 Caja</a>
+      <a href="inventario.html">📦 Inventario</a>
+      <a href="stock-carga.html">📋 Carga de stock</a>
+      <a href="alquileres.html" class="active">🔄 Alquileres</a>
+      <a href="facturas.html">🧾 Facturas</a>
+      <a href="precios.html">🏷️ Precios</a>
+      <a href="reportes.html">📈 Reportes</a>
+    </nav>
+
+    <main class="main">
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h1>🔄 Alquileres</h1>
+          <p>Préstamos y alquileres de equipos</p>
+        </div>
+        <button class="btn btn-primary" id="btn-nuevo-alquiler">+ Nuevo alquiler</button>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Activos</div>
+          <div class="kpi-value" id="kpi-activos">—</div>
+          <div class="kpi-sub">en curso</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-label">Vencidos</div>
+          <div class="kpi-value" id="kpi-vencidos">—</div>
+          <div class="kpi-sub">sin devolver</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-label">Depósitos retenidos</div>
+          <div class="kpi-value" id="kpi-depositos">—</div>
+          <div class="kpi-sub">total activos</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-label">Devueltos (mes)</div>
+          <div class="kpi-value" id="kpi-devueltos-mes">—</div>
+          <div class="kpi-sub">este mes</div>
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div class="card">
+        <div class="filter-row">
+          <input type="text" class="input" id="busqueda-alq" placeholder="🔍 Buscar cliente o producto…" style="flex:1;min-width:200px">
+          <select class="select" id="filtro-estado" style="min-width:150px">
+            <option value="">Todos los estados</option>
+            <option value="activo">🟢 Activos</option>
+            <option value="vencido">🔴 Vencidos</option>
+            <option value="devuelto">⚫ Devueltos</option>
+          </select>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Producto</th>
+                <th>Inicio</th>
+                <th>Vence</th>
+                <th>Días</th>
+                <th>Depósito</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="alq-tbody">
+              <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:32px">Cargando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Bottom nav mobile -->
+  <nav class="bottom-nav">
+    <a href="pos.html"><span class="icon">🛒</span>POS</a>
+    <a href="caja.html"><span class="icon">💰</span>Caja</a>
+    <a href="inventario.html"><span class="icon">📦</span>Stock</a>
+    <a href="index.html"><span class="icon">📊</span>Panel</a>
+  </nav>
+
+  <!-- Modal nuevo alquiler -->
+  <div class="modal-overlay hidden" id="modal-nuevo-alq">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Nuevo alquiler</span>
+        <button class="modal-close" id="btn-cerrar-nuevo-alq">✕</button>
+      </div>
+      <form id="form-nuevo-alq">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nombre del cliente *</label>
+            <input type="text" class="input" name="cliente_nombre" required placeholder="Ej: María García">
+          </div>
+          <div class="form-group">
+            <label>Teléfono</label>
+            <input type="tel" class="input" name="cliente_telefono" placeholder="Ej: 11-1234-5678">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Producto / Equipo *</label>
+          <input type="text" class="input" id="alq-producto-search" name="producto_nombre"
+            required placeholder="Escribí para buscar…" autocomplete="off">
+          <input type="hidden" id="alq-producto-id" name="producto_id">
+          <div id="alq-producto-sugerencias" style="display:none;position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);z-index:200;min-width:280px;box-shadow:0 4px 16px rgba(0,0,0,.12)"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Fecha inicio *</label>
+            <input type="date" class="input" name="fecha_inicio" required id="alq-fecha-inicio">
+          </div>
+          <div class="form-group">
+            <label>Fecha devolución prevista *</label>
+            <input type="date" class="input" name="fecha_fin_prevista" required id="alq-fecha-fin">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Depósito ($)</label>
+            <input type="number" class="input" name="deposito" min="0" step="100" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>Precio por día ($)</label>
+            <input type="number" class="input" name="precio_por_dia" min="0" step="50" placeholder="0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notas</label>
+          <textarea class="input" name="notas" rows="2" style="resize:vertical" placeholder="Observaciones, talle, condición del equipo…"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Registrar alquiler</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal detalle / devolver -->
+  <div class="modal-overlay hidden" id="modal-detalle-alq">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-header">
+        <span class="modal-title">Detalle de alquiler</span>
+        <button class="modal-close" id="btn-cerrar-detalle-alq">✕</button>
+      </div>
+      <div id="detalle-alq-content"></div>
+      <div style="display:flex;gap:10px;margin-top:20px" id="detalle-alq-actions"></div>
+    </div>
+  </div>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const sidebar   = document.getElementById('sidebar');
+    const overlay   = document.getElementById('sidebar-overlay');
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    });
+  </script>
+
+  <script type="module" src="js/common.js"></script>
+  <script type="module" src="js/theme.js"></script>
+  <script type="module" src="js/alquileres.js"></script>
+</body>
+</html>

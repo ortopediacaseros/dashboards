@@ -244,6 +244,17 @@ async function cargarAlertas() {
     alertas.push({ tipo: 'teal', icono: '✅', msg: 'Caja abierta — efectivo inicial: ' + formatMoney(caja.efectivo_inicial) });
   }
 
+  // Alquileres vencidos
+  const hoyDate = new Date(); hoyDate.setHours(0,0,0,0);
+  const { data: alqVenc } = await supabase
+    .from('alquileres')
+    .select('id')
+    .in('estado', ['activo', 'vencido'])
+    .lt('fecha_fin_prevista', hoyDate.toISOString().split('T')[0]);
+  if (alqVenc && alqVenc.length > 0) {
+    alertas.push({ tipo: 'red', icono: '🔄', msg: `${alqVenc.length} alquiler${alqVenc.length > 1 ? 'es' : ''} vencido${alqVenc.length > 1 ? 's' : ''} sin devolver` });
+  }
+
   const el = document.getElementById('alertas-container');
   if (alertas.length === 0) {
     el.innerHTML = '<div class="empty-state" style="padding:20px"><div class="icon">✅</div>Sin alertas activas</div>';

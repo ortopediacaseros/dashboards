@@ -24,8 +24,10 @@ function injectTopbar() {
       <div class="topbar-sub">${fecha.charAt(0).toUpperCase() + fecha.slice(1)}</div>
     </div>
     <div id="topbar-caja" style="margin-left:16px"></div>
+    <div id="topbar-ventas-hoy" class="topbar-stat" style="display:none"></div>
     <div class="topbar-right">
       <div class="topbar-search">🔍 Buscar producto, SKU…</div>
+      <a href="reportes.html" class="btn btn-ghost btn-sm" title="Exportar reportes">⬇ Exportar</a>
       <a href="pos.html" class="btn btn-primary btn-sm">+ Registrar venta</a>
       <button id="theme-toggle" class="theme-toggle-btn" title="Cambiar tema">🌙</button>
     </div>`;
@@ -39,9 +41,81 @@ async function cargarEstadoCaja() {
     const { data: caja } = await getCajaHoy();
     if (caja && caja.estado === 'abierta') {
       const hora = new Date(caja.created_at || Date.now()).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-      el.innerHTML = `<div class="caja-open"><div class="caja-dot"></div>Caja abierta desde las ${hora}</div>`;
+      el.innerHTML = `<div class="caja-open"><div class="caja-dot"></div>Caja abierta · ${hora}</div>`;
     }
   } catch {}
+}
+
+async function cargarTopbarStats() {
+  const el = document.getElementById('topbar-ventas-hoy');
+  if (!el) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const hoy = new Date().toISOString().split('T')[0];
+    const { data: ventas } = await supabase
+      .from('ventas')
+      .select('total')
+      .gte('fecha', hoy + 'T00:00:00')
+      .lte('fecha', hoy + 'T23:59:59');
+    const total = (ventas || []).reduce((s, v) => s + Number(v.total), 0);
+    const tickets = (ventas || []).length;
+    if (tickets > 0 || total > 0) {
+      el.style.display = '';
+      el.innerHTML = `<div class="topbar-stat-val">${formatMoney(total)}</div><div class="topbar-stat-lbl">Ventas hoy · ${tickets} ticket${tickets !== 1 ? 's' : ''}</div>`;
+    }
+  } catch {}
+}
+
+async function cargarSidebarBadges() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    // Stock crítico → badge en Inventario
+    const { data: prods } = await supabase
+      .from('productos')
+      .select('stock_actual, stock_minimo')
+      .eq('activo', true);
+    const critCount = (prods || []).filter(p => p.stock_actual <= p.stock_minimo).length;
+    if (critCount > 0) setBadge('inventario.html', critCount, 'red');
+
+    // Caja → badge si abierta
+    const hoy = new Date().toISOString().split('T')[0];
+    const { data: caja } = await supabase
+      .from('cajas').select('estado').eq('fecha', hoy).maybeSingle();
+    if (caja?.estado === 'abierta') setBadge('caja.html', 'Abierta', 'green');
+
+    // Facturas pendientes → badge en Facturas
+    const { count: factPend } = await supabase
+      .from('facturas').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente');
+    if (factPend > 0) setBadge('facturas.html', factPend, 'amber');
+
+    // Alquileres vencidos → badge en Alquileres
+    const hoyDate = new Date(); hoyDate.setHours(0,0,0,0);
+    const { data: alqVenc } = await supabase
+      .from('alquileres')
+      .select('id', { count: 'exact', head: false })
+      .in('estado', ['activo', 'vencido'])
+      .lt('fecha_fin_prevista', hoyDate.toISOString().split('T')[0]);
+    if (alqVenc && alqVenc.length > 0) setBadge('alquileres.html', alqVenc.length, 'red');
+
+    // Alertas = stock crítico + bajos
+    const bajos = (prods || []).filter(p => p.stock_actual > p.stock_minimo && p.stock_actual <= p.stock_minimo * 1.5).length;
+    const alertCount = critCount + bajos;
+    if (alertCount > 0) setBadge('index.html', alertCount, 'red');
+  } catch {}
+}
+
+function setBadge(href, value, color) {
+  const link = document.querySelector(`.sidebar a[href="${href}"]`);
+  if (!link) return;
+  const existing = link.querySelector('.nav-badge');
+  if (existing) existing.remove();
+  const badge = document.createElement('span');
+  badge.className = `nav-badge ${color}`;
+  badge.textContent = value;
+  link.appendChild(badge);
 }
 
 // ── Sidebar logo update ───────────────────────────────────
@@ -49,8 +123,8 @@ function updateSidebarLogo() {
   const logo = document.querySelector('.sidebar .logo');
   if (!logo || logo.querySelector('.logo-icon')) return; // ya actualizado
   logo.innerHTML = `
-    <img src="img/logo.webp" alt="Ortopedia Caseros"
-      style="height:36px;width:auto;object-fit:contain;border-radius:4px">`;
+    <img src="img/logo.jpg" alt="Ortopedia Caseros"
+      style="height:32px;width:auto;object-fit:contain;border-radius:4px">`;
 }
 
 // ── User card ─────────────────────────────────────────────
@@ -169,4 +243,6 @@ updateSidebarLogo();
 updateSidebarNav();
 injectSidebarSearch();
 cargarEstadoCaja();
+cargarTopbarStats();
+cargarSidebarBadges();
 injectUserCard();

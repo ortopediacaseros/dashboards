@@ -118,14 +118,16 @@ function renderTabla() {
       ? Math.round(((p.precio_venta - p.precio_costo) / p.precio_venta) * 100)
       : 0;
 
-    let stockClass, stockLabel;
+    let stockClass, fillClass;
     if (p.stock_actual <= p.stock_minimo) {
-      stockClass = 'stock-crit'; stockLabel = 'Crítico';
+      stockClass = 'stock-crit'; fillClass = 'crit';
     } else if (p.stock_actual <= p.stock_minimo * 1.5) {
-      stockClass = 'stock-warn'; stockLabel = 'Bajo';
+      stockClass = 'stock-warn'; fillClass = 'warn';
     } else {
-      stockClass = 'stock-ok'; stockLabel = 'OK';
+      stockClass = 'stock-ok'; fillClass = 'ok';
     }
+    const maxStock = Math.max(p.stock_actual, p.stock_minimo * 3, 1);
+    const fillPct = Math.min(100, Math.round((p.stock_actual / maxStock) * 100));
 
     return `
       <tr>
@@ -135,7 +137,12 @@ function renderTabla() {
         </td>
         <td style="font-size:12px;color:var(--text-muted)">${p.sku}</td>
         <td style="font-size:12px;color:var(--text-dim)">${p.ean || '—'}</td>
-        <td class="${stockClass}">${p.stock_actual}</td>
+        <td>
+          <div class="stk">
+            <span class="${stockClass}" style="min-width:24px;text-align:right">${p.stock_actual}</span>
+            <div class="stk-bar"><div class="stk-fill ${fillClass}" style="width:${fillPct}%"></div></div>
+          </div>
+        </td>
         <td style="font-size:12px;color:var(--text-dim)">${p.stock_minimo}</td>
         <td>${formatMoney(p.precio_venta)}</td>
         <td style="color:var(--text-muted)">${formatMoney(p.precio_costo)}</td>
