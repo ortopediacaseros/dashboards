@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tickets — Ortopedia Caseros</title>
+  <script>if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');</script>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <button class="hamburger" id="hamburger">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="logo">🦴 Ortopedia Caseros</div>
+    </nav>
+
+    <main class="main">
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h1>🧾 Tickets de venta</h1>
+          <p>Historial completo de ventas emitidas</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btn-exportar">⬇ Exportar CSV</button>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Tickets hoy</div>
+          <div class="kpi-value" id="kpi-hoy">—</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-label">Total hoy</div>
+          <div class="kpi-value" id="kpi-total-hoy">—</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-label">Tickets este mes</div>
+          <div class="kpi-value" id="kpi-mes">—</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-label">Total del mes</div>
+          <div class="kpi-value" id="kpi-total-mes">—</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--bg)">
+          <input type="date" class="input" id="filtro-desde" style="width:160px">
+          <input type="date" class="input" id="filtro-hasta" style="width:160px">
+          <select class="select" id="filtro-medio" style="width:180px">
+            <option value="">Todos los medios</option>
+            <option value="efectivo">Efectivo</option>
+            <option value="debito">Débito</option>
+            <option value="credito">Crédito</option>
+            <option value="transferencia">Transferencia</option>
+          </select>
+          <select class="select" id="filtro-estado-v" style="width:160px">
+            <option value="">Todos</option>
+            <option value="confirmada">Confirmadas</option>
+            <option value="anulada">Anuladas</option>
+          </select>
+          <button class="btn btn-secondary" id="btn-hoy">Hoy</button>
+          <button class="btn btn-secondary" id="btn-semana">Esta semana</button>
+          <button class="btn btn-secondary" id="btn-mes">Este mes</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Fecha y hora</th>
+                <th>Items</th>
+                <th>Medio de pago</th>
+                <th>Descuento</th>
+                <th>Total</th>
+                <th>Estado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="ventas-tbody">
+              <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-3)">Cargando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-top:1px solid var(--border);font-size:12px;color:var(--text-3)">
+          <span id="ventas-info">—</span>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost btn-sm" id="pg-prev">‹</button>
+            <button class="btn btn-ghost btn-sm" id="pg-next">›</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="pos.html"><span class="icon">🛒</span>POS</a>
+    <a href="caja.html"><span class="icon">💰</span>Caja</a>
+    <a href="index.html"><span class="icon">📊</span>Panel</a>
+    <a href="inventario.html"><span class="icon">📦</span>Stock</a>
+  </nav>
+
+  <div class="modal-overlay hidden" id="modal-detalle-venta">
+    <div class="modal" style="max-width:500px">
+      <div class="modal-header">
+        <span class="modal-title">Detalle del ticket</span>
+        <button class="modal-close" id="btn-cerrar-detalle">✕</button>
+      </div>
+      <div id="detalle-content"></div>
+      <div style="margin-top:20px" id="detalle-actions"></div>
+    </div>
+  </div>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const sidebar   = document.getElementById('sidebar');
+    const overlay   = document.getElementById('sidebar-overlay');
+    hamburger.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('open'); });
+    overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('open'); });
+  </script>
+
+  <script type="module" src="js/common.js"></script>
+  <script type="module" src="js/theme.js"></script>
+  <script type="module" src="js/ventas.js"></script>
+</body>
+</html>
