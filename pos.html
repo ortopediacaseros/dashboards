@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>POS — Ortopedia Caseros</title>
+  <script>if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');</script>
   <link rel="stylesheet" href="css/styles.css">
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
@@ -197,6 +198,7 @@
       <a href="pos.html" class="active">🛒 POS / Venta</a>
       <a href="caja.html">💰 Caja</a>
       <a href="inventario.html">📦 Inventario</a>
+      <a href="stock-carga.html">📋 Carga de stock</a>
       <a href="facturas.html">🧾 Facturas</a>
       <a href="precios.html">🏷️ Precios</a>
       <a href="reportes.html">📈 Reportes</a>
@@ -430,6 +432,7 @@
   </script>
 
   <script type="module" src="js/common.js"></script>
+  <script type="module" src="js/theme.js"></script>
   <script type="module" src="js/pos.js"></script>
 </body>
 </html>

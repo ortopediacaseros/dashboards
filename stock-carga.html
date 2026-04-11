@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carga de Stock — Ortopedia Caseros</title>
+  <script>if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');</script>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .scan-area {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+    }
+    #video-preview {
+      width: 100%;
+      max-height: 260px;
+      object-fit: cover;
+      display: block;
+      background: #000;
+    }
+    .scan-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .scan-frame {
+      width: 200px;
+      height: 120px;
+      border: 2px solid var(--teal);
+      border-radius: 8px;
+      box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
+    }
+    .scan-line {
+      position: absolute;
+      left: calc(50% - 98px);
+      width: 196px;
+      height: 2px;
+      background: var(--teal);
+      animation: scanline 2s ease-in-out infinite;
+      opacity: 0.8;
+    }
+    @keyframes scanline {
+      0%   { top: calc(50% - 58px); }
+      50%  { top: calc(50% + 58px); }
+      100% { top: calc(50% - 58px); }
+    }
+    .scan-status {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.65);
+      color: #fff;
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .confirm-card {
+      animation: slideUp 0.2s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .qty-btns { display: flex; gap: 8px; margin-top: 8px; }
+    .qty-btn {
+      flex: 1;
+      padding: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .qty-btn:hover { background: var(--teal-dim); border-color: var(--teal); }
+    .session-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+    .session-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+    }
+    .session-item-name { font-weight: 500; }
+    .session-item-qty {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      color: var(--teal);
+      white-space: nowrap;
+      margin-left: 12px;
+    }
+    .flash-green {
+      animation: flashGreen 0.5s ease;
+    }
+    @keyframes flashGreen {
+      0%   { background: var(--green-dim); }
+      100% { background: transparent; }
+    }
+    .cam-controls {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px;
+      background: var(--surface-2);
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <button class="hamburger" id="hamburger">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="logo">🦴 Ortopedia Caseros</div>
+      <div class="sidebar-section">Principal</div>
+      <a href="index.html">📊 Dashboard</a>
+      <a href="pos.html">🛒 POS / Venta</a>
+      <a href="caja.html">💰 Caja</a>
+      <div class="sidebar-section">Inventario</div>
+      <a href="inventario.html">📦 Productos</a>
+      <a href="stock-carga.html" class="active">📋 Carga de stock</a>
+      <a href="precios.html">🏷️ Precios</a>
+      <div class="sidebar-section">Gestión</div>
+      <a href="facturas.html">🧾 Facturas</a>
+      <div class="sidebar-section">Reportes</div>
+      <a href="reportes.html">📈 Reportes</a>
+    </nav>
+
+    <main class="main">
+      <div class="page-header">
+        <div>
+          <h1>📋 Carga de stock</h1>
+          <p>Escaneá productos para sumar unidades al inventario</p>
+        </div>
+        <button class="btn btn-secondary" id="btn-ver-resumen" style="display:none">
+          📦 Ver resumen (<span id="resumen-count">0</span>)
+        </button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start">
+
+        <!-- Columna izquierda: cámara + confirmación -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+
+          <!-- Scanner -->
+          <div class="scan-area" id="scan-area">
+            <div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px" id="cam-placeholder">
+              Cámara no iniciada. Presioná "Iniciar cámara" para comenzar.
+            </div>
+            <video id="video-preview" style="display:none" autoplay muted playsinline></video>
+            <div class="scan-overlay" id="scan-overlay" style="display:none">
+              <div class="scan-frame"></div>
+              <div class="scan-line"></div>
+            </div>
+            <div class="scan-status" id="scan-status" style="display:none">Escaneando...</div>
+            <div class="cam-controls">
+              <button class="btn btn-primary" id="btn-cam" style="flex:1">📷 Iniciar cámara</button>
+              <button class="btn btn-secondary" id="btn-sin-codigo" style="flex:1">📝 Sin código</button>
+            </div>
+          </div>
+
+          <!-- Buscador manual (oculto por defecto) -->
+          <div id="buscador-manual" style="display:none">
+            <div class="card">
+              <div class="card-title">🔍 Buscar por nombre</div>
+              <input type="text" class="input" id="input-busqueda" placeholder="Nombre o SKU del producto..."
+                autocomplete="off" style="margin-bottom:10px">
+              <div id="resultados-busqueda"></div>
+            </div>
+          </div>
+
+          <!-- Confirmación de producto escaneado -->
+          <div id="confirm-area"></div>
+
+        </div>
+
+        <!-- Columna derecha: resumen de sesión -->
+        <div class="card" id="panel-sesion">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+            <span>📦 Sesión actual</span>
+            <span id="sesion-total-badge" class="badge badge-teal" style="display:none"></span>
+          </div>
+          <div id="sesion-vacia" style="color:var(--text-muted);font-size:13px;padding:12px 0">
+            Aún no cargaste productos. Escaneá un código para comenzar.
+          </div>
+          <div id="sesion-items" class="session-list" style="display:none"></div>
+          <div id="sesion-footer" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+            <button class="btn btn-primary btn-full" id="btn-confirmar-todo">
+              ✅ Confirmar todo en Supabase
+            </button>
+            <button class="btn btn-secondary btn-full" id="btn-limpiar-sesion" style="margin-top:8px">
+              🗑 Limpiar sesión
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal resumen móvil -->
+  <div class="modal-overlay hidden" id="modal-resumen">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-title">📦 Resumen de sesión</div>
+      <div id="modal-resumen-items" class="session-list" style="max-height:60vh;overflow-y:auto"></div>
+      <div style="margin-top:16px;display:flex;gap:10px">
+        <button class="btn btn-primary" id="modal-btn-confirmar" style="flex:1">✅ Confirmar todo</button>
+        <button class="btn btn-secondary modal-close" style="flex:1">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom nav mobile -->
+  <nav class="bottom-nav">
+    <a href="pos.html"><span class="icon">🛒</span>POS</a>
+    <a href="caja.html"><span class="icon">💰</span>Caja</a>
+    <a href="inventario.html"><span class="icon">📦</span>Stock</a>
+    <a href="index.html"><span class="icon">📊</span>Panel</a>
+  </nav>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    });
+    document.querySelectorAll('.modal-close').forEach(b =>
+      b.addEventListener('click', () =>
+        b.closest('.modal-overlay').classList.add('hidden')));
+  </script>
+
+  <script type="module" src="js/common.js"></script>
+  <script type="module" src="js/theme.js"></script>
+  <script type="module" src="js/stock-carga.js"></script>
+</body>
+</html>
