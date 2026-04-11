@@ -370,18 +370,29 @@ document.getElementById('btn-iniciar-scan-bulk').addEventListener('click', async
   container.style.display = '';
   document.getElementById('btn-iniciar-scan-bulk').style.display = 'none';
 
-  bulkScanner = new Html5Qrcode('scan-bulk-container');
+  const formats = [
+    Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.QR_CODE,
+  ];
+  bulkScanner = new Html5Qrcode('scan-bulk-container', { formatsToSupport: formats, verbose: false });
   try {
     await bulkScanner.start(
       { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 250, height: 160 } },
+      { fps: 15, qrbox: { width: 280, height: 100 } },
       onBulkEAN,
       () => {}
     );
-  } catch (err) {
-    showToast('Error al acceder a la cámara: ' + err.message, 'error');
-    container.style.display = 'none';
-    document.getElementById('btn-iniciar-scan-bulk').style.display = '';
+  } catch {
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (devices?.length) await bulkScanner.start(devices[0].id, { fps: 15, qrbox: { width: 280, height: 100 } }, onBulkEAN, () => {});
+    } catch (err2) {
+      showToast('Error al acceder a la cámara: ' + (err2?.message || String(err2)), 'error');
+      container.style.display = 'none';
+      document.getElementById('btn-iniciar-scan-bulk').style.display = '';
+    }
   }
 });
 

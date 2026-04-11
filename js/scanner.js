@@ -13,16 +13,35 @@ export class Scanner {
       throw new Error('La librería de cámara no cargó. Verificá la conexión a internet.');
     }
 
-    // Limpiar instancia anterior si quedó colgada
     if (this._instance) {
       try { await this._instance.stop(); } catch (_) {}
       try { this._instance.clear(); } catch (_) {}
       this._instance = null;
     }
 
-    this._instance = new Html5Qrcode(this.containerId, { verbose: false });
+    // Habilitar todos los formatos de código de barras comunes
+    const formats = [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.DATA_MATRIX,
+    ];
 
-    const config = { fps: 10, qrbox: { width: 250, height: 180 } };
+    this._instance = new Html5Qrcode(this.containerId, {
+      formatsToSupport: formats,
+      verbose: false
+    });
+
+    const config = {
+      fps: 15,
+      qrbox: { width: 280, height: 100 },  // Rectangular: mejor para EAN/CODE128
+      aspectRatio: 1.5,
+    };
+
     const onDecode = (decodedText) => {
       if (decodedText !== this._lastCode) {
         this._lastCode = decodedText;
@@ -31,22 +50,13 @@ export class Scanner {
         this.onResult(decodedText);
       }
     };
-    const onError = () => {};
 
-    // Intentar cámara trasera primero; si falla, usar cualquier cámara disponible
     try {
-      await this._instance.start({ facingMode: 'environment' }, config, onDecode, onError);
-    } catch (envErr) {
-      try {
-        const devices = await Html5Qrcode.getCameras();
-        if (!devices || devices.length === 0) {
-          throw new Error('No se encontró ninguna cámara en este dispositivo.');
-        }
-        await this._instance.start(devices[0].id, config, onDecode, onError);
-      } catch (fallbackErr) {
-        const msg = fallbackErr?.message || String(fallbackErr) || 'Error desconocido al iniciar la cámara';
-        throw new Error(msg);
-      }
+      await this._instance.start({ facingMode: 'environment' }, config, onDecode, () => {});
+    } catch (_) {
+      const devices = await Html5Qrcode.getCameras();
+      if (!devices || devices.length === 0) throw new Error('No se encontró ninguna cámara.');
+      await this._instance.start(devices[0].id, config, onDecode, () => {});
     }
 
     this.active = true;
