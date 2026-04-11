@@ -59,7 +59,7 @@ export async function getCajaHoy() {
     .from('cajas')
     .select('*')
     .eq('fecha', hoy)
-    .single();
+    .maybeSingle();
   return { data, error };
 }
 

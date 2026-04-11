@@ -3,7 +3,6 @@ import { supabase, formatMoney, showToast } from './supabase.js';
 const PER_PAGE = 15;
 let allVentas = [];
 let paginaActual = 1;
-let ventaEditando = null;
 
 const tbody   = document.getElementById('ventas-tbody');
 const infoEl  = document.getElementById('ventas-info');
@@ -42,9 +41,8 @@ async function cargarVentas() {
 
   tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-3)">Cargando…</td></tr>`;
 
-  // Fetch only venta columns — items loaded on demand in the detail modal
   let q = supabase.from('ventas')
-    .select('id, fecha, medio_pago, descuento, total, estado, items_count:items_venta(count)')
+    .select('id, numero_ticket, fecha, total, medio_pago, descuento_pct, observaciones, estado, items_count:items_venta(count)')
     .order('fecha', { ascending: false });
 
   if (desde) q = q.gte('fecha', desde + 'T00:00:00');
@@ -55,24 +53,24 @@ async function cargarVentas() {
   const { data, error } = await q;
 
   if (error) {
-    // Fallback: fetch without count if the alias/join fails
+    // Fallback sin count
     let q2 = supabase.from('ventas')
-      .select('id, fecha, medio_pago, descuento, total, estado')
+      .select('id, numero_ticket, fecha, total, medio_pago, descuento_pct, observaciones, estado')
       .order('fecha', { ascending: false });
     if (desde) q2 = q2.gte('fecha', desde + 'T00:00:00');
     if (hasta) q2 = q2.lte('fecha', hasta + 'T23:59:59');
     if (medio) q2 = q2.eq('medio_pago', medio);
     if (estado) q2 = q2.eq('estado', estado);
-    const { data: data2, error: error2 } = await q2;
-    if (error2) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--red)">Error al cargar ventas: ${error2.message}</td></tr>`;
+    const { data: d2, error: e2 } = await q2;
+    if (e2) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--red)">Error: ${e2.message}</td></tr>`;
       return;
     }
-    allVentas = (data2 || []).map(v => ({ ...v, _items_count: null }));
+    allVentas = (d2 || []).map(v => ({ ...v, _cnt: null }));
   } else {
     allVentas = (data || []).map(v => ({
       ...v,
-      _items_count: Array.isArray(v.items_count) ? v.items_count[0]?.count ?? null : null
+      _cnt: Array.isArray(v.items_count) ? (v.items_count[0]?.count ?? null) : null
     }));
   }
 
@@ -94,19 +92,20 @@ function renderTabla() {
   }
 
   tbody.innerHTML = slice.map((v, i) => {
-    const n     = (paginaActual - 1) * PER_PAGE + i + 1;
-    const fecha = new Date(v.fecha).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-    const cnt   = v._items_count != null ? `${v._items_count} ítem${v._items_count !== 1 ? 's' : ''}` : '—';
-    const medio = v.medio_pago ? v.medio_pago.charAt(0).toUpperCase() + v.medio_pago.slice(1) : '—';
-    const desc  = v.descuento > 0
-      ? `<span style="color:var(--amber)">-${formatMoney(v.descuento)}</span>`
+    const n      = (paginaActual - 1) * PER_PAGE + i + 1;
+    const ticket = v.numero_ticket ? `#${v.numero_ticket}` : `#${n}`;
+    const fecha  = new Date(v.fecha).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    const cnt    = v._cnt != null ? `${v._cnt} ítem${v._cnt != 1 ? 's' : ''}` : '—';
+    const medio  = v.medio_pago ? v.medio_pago.charAt(0).toUpperCase() + v.medio_pago.slice(1) : '—';
+    const desc   = v.descuento_pct > 0
+      ? `<span style="color:var(--amber)">-${v.descuento_pct}%</span>`
       : `<span style="color:var(--text-3)">—</span>`;
     const anulada = v.estado === 'anulada';
-    const badge = anulada
+    const badge   = anulada
       ? `<span class="badge b-red">Anulada</span>`
       : `<span class="badge b-green">Confirmada</span>`;
     return `<tr style="${anulada ? 'opacity:0.55' : ''}">
-      <td class="mono" style="color:var(--text-3)">#${n}</td>
+      <td class="mono" style="color:var(--text-3)">${ticket}</td>
       <td>${fecha}</td>
       <td style="color:var(--text-2)">${cnt}</td>
       <td>${medio}</td>
@@ -130,25 +129,22 @@ function actualizarKpis() {
   const mesStr   = startOfMonth();
   const hoyV = allVentas.filter(v => v.fecha?.startsWith(todayStr) && v.estado !== 'anulada');
   const mesV  = allVentas.filter(v => v.fecha >= mesStr && v.estado !== 'anulada');
-  document.getElementById('kpi-hoy').textContent      = hoyV.length;
-  document.getElementById('kpi-total-hoy').textContent = formatMoney(hoyV.reduce((s,v) => s + Number(v.total), 0));
+  document.getElementById('kpi-hoy').textContent       = hoyV.length;
+  document.getElementById('kpi-total-hoy').textContent = formatMoney(hoyV.reduce((s, v) => s + Number(v.total), 0));
   document.getElementById('kpi-mes').textContent       = mesV.length;
-  document.getElementById('kpi-total-mes').textContent = formatMoney(mesV.reduce((s,v) => s + Number(v.total), 0));
+  document.getElementById('kpi-total-mes').textContent = formatMoney(mesV.reduce((s, v) => s + Number(v.total), 0));
 }
 
 async function abrirDetalle(id) {
   const v = allVentas.find(x => x.id === id);
   if (!v) return;
-
-  ventaEditando = v;
   detalleContent.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-3)">Cargando…</div>`;
   detalleActions.innerHTML = '';
   overlay.classList.remove('hidden');
 
-  // Load items on demand
   const { data: items } = await supabase
     .from('items_venta')
-    .select('id, cantidad, precio_unitario, producto_id, productos(nombre)')
+    .select('id, cantidad, precio_unitario, subtotal, productos(nombre)')
     .eq('venta_id', id);
 
   renderDetalle(v, items || []);
@@ -156,13 +152,17 @@ async function abrirDetalle(id) {
 
 function renderDetalle(v, items) {
   const fecha   = new Date(v.fecha).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-  const subtotal = items.reduce((s, i) => s + (i.cantidad * i.precio_unitario), 0);
+  const subtotal = items.reduce((s, i) => s + Number(i.subtotal || i.cantidad * i.precio_unitario), 0);
   const medio   = v.medio_pago ? v.medio_pago.charAt(0).toUpperCase() + v.medio_pago.slice(1) : '—';
   const anulada = v.estado === 'anulada';
+  const ticket  = v.numero_ticket ? `Ticket #${v.numero_ticket}` : '';
 
   detalleContent.innerHTML = `
     <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:12px;color:var(--text-3)">${fecha}</div>
+      <div>
+        ${ticket ? `<div style="font-weight:600;font-size:13px">${ticket}</div>` : ''}
+        <div style="font-size:12px;color:var(--text-3)">${fecha}</div>
+      </div>
       ${anulada ? '<span class="badge b-red">Anulada</span>' : '<span class="badge b-green">Confirmada</span>'}
     </div>
     <table style="width:100%;border-collapse:collapse">
@@ -180,18 +180,18 @@ function renderDetalle(v, items) {
             <td style="padding:8px 20px;font-size:13px;border-bottom:1px solid var(--border)">${i.productos?.nombre || '—'}</td>
             <td style="padding:8px 8px;text-align:center;font-size:13px;border-bottom:1px solid var(--border)">${i.cantidad}</td>
             <td style="padding:8px 8px;text-align:right;font-size:13px;border-bottom:1px solid var(--border)">${formatMoney(i.precio_unitario)}</td>
-            <td style="padding:8px 20px;text-align:right;font-size:13px;font-weight:500;border-bottom:1px solid var(--border)">${formatMoney(i.cantidad * i.precio_unitario)}</td>
+            <td style="padding:8px 20px;text-align:right;font-size:13px;font-weight:500;border-bottom:1px solid var(--border)">${formatMoney(i.subtotal || i.cantidad * i.precio_unitario)}</td>
           </tr>`).join('')
-          : `<tr><td colspan="4" style="padding:16px 20px;text-align:center;color:var(--text-3);font-size:13px">Sin ítems registrados</td></tr>`}
+          : `<tr><td colspan="4" style="padding:16px 20px;text-align:center;color:var(--text-3)">Sin ítems registrados</td></tr>`}
       </tbody>
     </table>
-    <div style="padding:12px 20px;display:flex;flex-direction:column;gap:5px" id="detalle-totales">
+    <div style="padding:12px 20px;display:flex;flex-direction:column;gap:5px">
       <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-3)">
         <span>Subtotal</span><span>${formatMoney(subtotal)}</span>
       </div>
-      ${v.descuento > 0 ? `
+      ${v.descuento_pct > 0 ? `
       <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--amber)">
-        <span>Descuento</span><span>-${formatMoney(v.descuento)}</span>
+        <span>Descuento</span><span>-${v.descuento_pct}%</span>
       </div>` : ''}
       <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;border-top:1px solid var(--border);padding-top:8px;margin-top:2px">
         <span>Total</span><span>${formatMoney(v.total)}</span>
@@ -199,6 +199,10 @@ function renderDetalle(v, items) {
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:2px">
         <span>Medio de pago</span><span>${medio}</span>
       </div>
+      ${v.observaciones ? `
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3)">
+        <span>Observaciones</span><span>${v.observaciones}</span>
+      </div>` : ''}
     </div>`;
 
   detalleActions.innerHTML = '';
@@ -209,7 +213,7 @@ function renderDetalle(v, items) {
     const btnEditar = document.createElement('button');
     btnEditar.className = 'btn btn-secondary btn-full';
     btnEditar.textContent = '✏ Editar';
-    btnEditar.addEventListener('click', () => mostrarFormEdit(v, items));
+    btnEditar.addEventListener('click', () => mostrarFormEdit(v, items, subtotal));
 
     const btnAnular = document.createElement('button');
     btnAnular.className = 'btn btn-danger btn-full';
@@ -222,36 +226,41 @@ function renderDetalle(v, items) {
   }
 }
 
-function mostrarFormEdit(v, items) {
+function mostrarFormEdit(v, items, subtotal) {
   const medioActual = v.medio_pago || 'efectivo';
-  const descActual  = v.descuento || 0;
-  const subtotal    = items.reduce((s, i) => s + (i.cantidad * i.precio_unitario), 0);
+  const descActual  = v.descuento_pct || 0;
+  const totalActual = v.total;
 
   detalleContent.innerHTML = `
-    <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
-      <div style="font-size:13px;font-weight:600;margin-bottom:12px">Editar ticket</div>
-      <div class="form-group" style="margin-bottom:12px">
+    <div style="padding:16px 20px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:14px">Editar ticket</div>
+      <div style="margin-bottom:12px">
         <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px">Medio de pago</label>
         <select class="select" id="edit-medio" style="width:100%">
-          <option value="efectivo"       ${medioActual==='efectivo'       ?'selected':''}>Efectivo</option>
-          <option value="debito"         ${medioActual==='debito'         ?'selected':''}>Débito</option>
-          <option value="credito"        ${medioActual==='credito'        ?'selected':''}>Crédito</option>
-          <option value="transferencia"  ${medioActual==='transferencia'  ?'selected':''}>Transferencia</option>
+          <option value="efectivo"      ${medioActual==='efectivo'      ?'selected':''}>Efectivo</option>
+          <option value="debito"        ${medioActual==='debito'        ?'selected':''}>Débito</option>
+          <option value="credito"       ${medioActual==='credito'       ?'selected':''}>Crédito</option>
+          <option value="transferencia" ${medioActual==='transferencia' ?'selected':''}>Transferencia</option>
         </select>
       </div>
-      <div class="form-group" style="margin-bottom:12px">
-        <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px">Descuento ($)</label>
-        <input type="number" class="input" id="edit-descuento" value="${descActual}" min="0" step="0.01" style="width:100%">
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px">Descuento (%)</label>
+        <input type="number" class="input" id="edit-desc" value="${descActual}" min="0" max="100" step="0.5" style="width:100%">
       </div>
-      <div style="font-size:12px;color:var(--text-3);padding:8px 0;border-top:1px solid var(--border);margin-top:4px" id="edit-preview-total">
-        Total: ${formatMoney(subtotal - descActual)}
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px">Observaciones</label>
+        <input type="text" class="input" id="edit-obs" value="${v.observaciones || ''}" style="width:100%" placeholder="Opcional">
+      </div>
+      <div style="font-size:13px;color:var(--text-2);padding:8px 0;border-top:1px solid var(--border)" id="edit-preview">
+        Total: <strong>${formatMoney(totalActual)}</strong>
       </div>
     </div>`;
 
-  const descInput = document.getElementById('edit-descuento');
-  descInput.addEventListener('input', () => {
-    const d = parseFloat(descInput.value) || 0;
-    document.getElementById('edit-preview-total').textContent = `Total: ${formatMoney(Math.max(0, subtotal - d))}`;
+  document.getElementById('edit-desc').addEventListener('input', () => {
+    const pct  = parseFloat(document.getElementById('edit-desc').value) || 0;
+    const newT = subtotal * (1 - pct / 100);
+    document.getElementById('edit-preview').innerHTML =
+      `Total: <strong>${formatMoney(Math.max(0, newT))}</strong>`;
   });
 
   detalleActions.innerHTML = '';
@@ -265,7 +274,7 @@ function mostrarFormEdit(v, items) {
 
   const btnGuardar = document.createElement('button');
   btnGuardar.className = 'btn btn-primary btn-full';
-  btnGuardar.textContent = 'Guardar cambios';
+  btnGuardar.textContent = 'Guardar';
   btnGuardar.addEventListener('click', () => guardarEdicion(v, items, subtotal));
 
   wrap.appendChild(btnCancelar);
@@ -274,31 +283,28 @@ function mostrarFormEdit(v, items) {
 }
 
 async function guardarEdicion(v, items, subtotal) {
-  const medio     = document.getElementById('edit-medio').value;
-  const descuento = parseFloat(document.getElementById('edit-descuento').value) || 0;
-  const total     = Math.max(0, subtotal - descuento);
+  const medio       = document.getElementById('edit-medio').value;
+  const descuento_pct = parseFloat(document.getElementById('edit-desc').value) || 0;
+  const observaciones = document.getElementById('edit-obs').value.trim() || null;
+  const total         = Math.max(0, Math.round(subtotal * (1 - descuento_pct / 100) * 100) / 100);
 
   const { error } = await supabase.from('ventas')
-    .update({ medio_pago: medio, descuento, total })
+    .update({ medio_pago: medio, descuento_pct, observaciones, total })
     .eq('id', v.id);
 
-  if (error) { showToast('Error al guardar', 'error'); return; }
+  if (error) { showToast('Error al guardar: ' + error.message, 'error'); return; }
 
   showToast('Ticket actualizado', 'success');
-  // Update local copy
   const idx = allVentas.findIndex(x => x.id === v.id);
-  if (idx !== -1) {
-    allVentas[idx] = { ...allVentas[idx], medio_pago: medio, descuento, total };
-    ventaEditando = allVentas[idx];
-  }
+  if (idx !== -1) allVentas[idx] = { ...allVentas[idx], medio_pago: medio, descuento_pct, observaciones, total };
   renderTabla();
-  renderDetalle({ ...v, medio_pago: medio, descuento, total }, items);
+  renderDetalle({ ...v, medio_pago: medio, descuento_pct, observaciones, total }, items);
 }
 
 async function anularVenta(id) {
   if (!confirm('¿Anular este ticket? Esta acción no se puede deshacer.')) return;
   const { error } = await supabase.from('ventas').update({ estado: 'anulada' }).eq('id', id);
-  if (error) { showToast('Error al anular el ticket', 'error'); return; }
+  if (error) { showToast('Error al anular: ' + error.message, 'error'); return; }
   showToast('Ticket anulado', 'success');
   overlay.classList.add('hidden');
   await cargarVentas();
@@ -306,9 +312,17 @@ async function anularVenta(id) {
 
 function exportarCSV() {
   if (!allVentas.length) { showToast('No hay datos para exportar', 'error'); return; }
-  const rows = [['#','Fecha','Medio','Descuento','Total','Estado']];
-  allVentas.forEach((v, i) => {
-    rows.push([i+1, new Date(v.fecha).toLocaleString('es-AR'), v.medio_pago||'', v.descuento||0, v.total||0, v.estado||'']);
+  const rows = [['Ticket','Fecha','Medio','Descuento%','Total','Estado','Observaciones']];
+  allVentas.forEach(v => {
+    rows.push([
+      v.numero_ticket || '',
+      new Date(v.fecha).toLocaleString('es-AR'),
+      v.medio_pago || '',
+      v.descuento_pct || 0,
+      v.total || 0,
+      v.estado || '',
+      v.observaciones || ''
+    ]);
   });
   const csv  = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -320,7 +334,6 @@ function exportarCSV() {
 
 async function init() {
   if (!await checkAuth()) return;
-
   setFiltroFechas(startOfMonth(), hoy());
 
   document.getElementById('btn-hoy').addEventListener('click',    () => { setFiltroFechas(hoy(), hoy()); cargarVentas(); });
@@ -333,7 +346,6 @@ async function init() {
 
   pgPrev.addEventListener('click', () => { paginaActual--; renderTabla(); });
   pgNext.addEventListener('click', () => { paginaActual++; renderTabla(); });
-
   document.getElementById('btn-exportar').addEventListener('click', exportarCSV);
   document.getElementById('btn-cerrar-detalle').addEventListener('click', () => overlay.classList.add('hidden'));
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.add('hidden'); });
