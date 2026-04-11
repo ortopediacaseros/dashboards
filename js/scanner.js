@@ -1,6 +1,3 @@
-// Usa html5-qrcode (cargado como script global en pos.html)
-// https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js
-
 export class Scanner {
   constructor(containerId, onResult) {
     this.containerId = containerId;
@@ -12,6 +9,9 @@ export class Scanner {
   }
 
   async start() {
+    if (typeof Html5Qrcode === 'undefined') {
+      throw new Error('La librería de cámara no cargó. Verificá la conexión a internet.');
+    }
     this._instance = new Html5Qrcode(this.containerId);
 
     const config = {

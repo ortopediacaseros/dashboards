@@ -170,11 +170,12 @@ function updateSidebarLogo() {
   const logo = document.querySelector('.sidebar .logo');
   if (!logo) return;
   logo.innerHTML = `<img src="img/logo.jpg" alt="Ortopedia Caseros"
-    style="height:52px;width:auto;max-width:188px;object-fit:contain;display:block">`;
+    style="width:calc(100% - 24px);max-width:200px;height:auto;object-fit:contain;display:block;border-radius:6px">`;
   logo.style.justifyContent = 'center';
-  logo.style.padding = '10px 20px';
+  logo.style.alignItems = 'center';
+  logo.style.padding = '14px 12px';
   logo.style.height = 'auto';
-  logo.style.minHeight = 'var(--topbar-h)';
+  logo.style.minHeight = '0';
 }
 
 async function injectUserCard() {
