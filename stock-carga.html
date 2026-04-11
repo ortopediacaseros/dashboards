@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <link rel="stylesheet" href="css/styles.css">
   <style>
+    #scanner-container.hidden { display: none; }
     .scan-area {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -161,7 +162,7 @@
             <div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px" id="cam-placeholder">
               📷 Presioná "Iniciar cámara" para comenzar a escanear
             </div>
-            <div id="scanner-container" style="display:none"></div>
+            <div id="scanner-container" class="hidden" style="width:100%;background:#000;min-height:200px"></div>
             <div class="cam-controls">
               <button class="btn btn-primary" id="btn-cam" style="flex:1">📷 Iniciar cámara</button>
               <button class="btn btn-secondary" id="btn-sin-codigo" style="flex:1">📝 Sin código</button>

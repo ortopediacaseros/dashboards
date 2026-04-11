@@ -46,19 +46,17 @@ async function iniciarCamara() {
   btn.disabled = true;
   btn.textContent = 'Iniciando...';
 
-  // El container debe ser visible ANTES de iniciar — html5-qrcode necesita dimensiones
   document.getElementById('cam-placeholder').style.display = 'none';
-  document.getElementById('scanner-container').style.display = 'block';
+  document.getElementById('scanner-container').classList.remove('hidden');
 
+  scanner = new Scanner('scanner-container', onCodigoDetectado);
   try {
-    scanner = new Scanner('scanner-container', onCodigoDetectado);
     await scanner.start();
-
     camaraActiva = true;
     btn.disabled = false;
     btn.textContent = '⏹ Detener cámara';
   } catch (err) {
-    document.getElementById('scanner-container').style.display = 'none';
+    document.getElementById('scanner-container').classList.add('hidden');
     document.getElementById('cam-placeholder').style.display = 'block';
     showToast('No se pudo acceder a la cámara: ' + (err?.message || String(err)), 'error');
     btn.disabled = false;
@@ -68,7 +66,7 @@ async function iniciarCamara() {
 
 function detenerCamara() {
   if (scanner) { scanner.stop(); scanner = null; }
-  document.getElementById('scanner-container').style.display = 'none';
+  document.getElementById('scanner-container').classList.add('hidden');
   document.getElementById('cam-placeholder').style.display = 'block';
   document.getElementById('cam-placeholder').textContent = '📷 Cámara detenida. Presioná "Iniciar cámara" para volver a escanear.';
   document.getElementById('btn-cam').textContent = '📷 Iniciar cámara';
