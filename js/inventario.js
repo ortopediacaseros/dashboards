@@ -10,32 +10,98 @@ let sortCol = 'nombre';
 let sortDir = 'asc';
 
 // ══════════════════════════════════════════════════════════
-// CONFIGURACIÓN DE PROVEEDORES
+// MOTOR DE PERSISTENCIA EN NUBE (SUPABASE) - PERFILES DE PROVEEDOR
 // ══════════════════════════════════════════════════════════
-const configProveedores = {
-  generico: {
-    nombreDB: 'Genérico',
-    esperadas: ['nombre', 'ean', 'categoria', 'proveedor', 'precio_venta', 'precio_costo', 'stock_actual', 'stock_minimo'],
-    mapRow: (row) => ({
-      nombre: row.nombre,
-      ean: row.ean,
-      categoria: row.categoria,
-      proveedor: row.proveedor || null,
-      precio_venta: parseFloat(row.precio_venta),
-      precio_costo: parseFloat(row.precio_costo),
-      stock_actual: parseInt(row.stock_actual) || 0,
-      stock_minimo: parseInt(row.stock_minimo) || 5
-    })
+
+const perfilGenerico = {
+  nombreDB: 'Genérico (Formato Ortopedia)',
+  isBase: true,
+  mapeo: {
+    nombre: 'nombre', ean: 'ean', categoria: 'categoria', proveedor: 'proveedor',
+    precio_venta: 'precio_venta', precio_costo: 'precio_costo'
   }
-  // Podés dejar Dema y Silfab vacíos por ahora y armarlos directo desde la UI "Nuevo Proveedor"
 };
+
+let configProveedores = { generico: perfilGenerico };
+
+async function cargarPerfilesGuardados() {
+  // 1. Buscamos los perfiles en Supabase
+  const { data, error } = await supabase.from('perfiles_proveedores').select('*');
+  
+  if (error) { 
+    console.error('Error cargando perfiles:', error); 
+    showToast('Error cargando perfiles de proveedores', 'error');
+    return; 
+  }
+
+  // 2. Reiniciamos el diccionario base
+  configProveedores = { generico: perfilGenerico };
+  
+  // 3. Inyectamos los que vinieron de la base de datos
+  if (data) {
+    data.forEach(prov => {
+      configProveedores[prov.id] = {
+        nombreDB: prov.nombre,
+        isBase: false,
+        mapeo: prov.mapeo
+      };
+    });
+  }
+
+  // Actualizar el <select> de Carga Masiva
+  const selector = document.getElementById('csv-proveedor-selector');
+  if (selector) {
+    selector.innerHTML = '';
+    for (const [id, config] of Object.entries(configProveedores)) {
+      const opt = document.createElement('option');
+      opt.value = id; opt.textContent = config.nombreDB;
+      selector.appendChild(opt);
+    }
+  }
+
+  // Actualizar la lista de la pestaña "Gestionar"
+  const lista = document.getElementById('lista-perfiles-guardados');
+  if (lista) {
+    lista.innerHTML = Object.entries(configProveedores).map(([id, config]) => `
+      <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
+        <div>
+          <strong style="font-size:13px; display:block;">${config.nombreDB}</strong>
+          <span style="font-size:11px; color:var(--text-dim)">Mapea ${Object.values(config.mapeo).filter(Boolean).length} columnas</span>
+        </div>
+        ${config.isBase 
+          ? `<span style="font-size:11px; color:var(--text-muted); background:var(--bg-body); padding:4px 8px; border-radius:4px;">Por defecto</span>` 
+          : `<button class="btn btn-secondary" style="padding:4px 8px; font-size:12px; color:var(--red);" onclick="window.eliminarPerfilProveedor('${id}')">🗑️ Borrar</button>`
+        }
+      </div>
+    `).join('');
+  }
+}
+
+window.eliminarPerfilProveedor = async (id) => {
+  if(confirm('¿Estás seguro de que querés borrar este perfil de la base de datos?')) {
+    const { error } = await supabase.from('perfiles_proveedores').delete().eq('id', id);
+    if (error) { showToast('Error al borrar de la nube: ' + error.message, 'error'); return; }
+    
+    cargarPerfilesGuardados();
+    showToast('Perfil eliminado de la base de datos', 'success');
+  }
+};
+
+// ══════════════════════════════════════════════════════════
+// INICIALIZACIÓN Y CARGA DE PRODUCTOS
+// ══════════════════════════════════════════════════════════
 
 async function init() {
   const session = await checkAuth();
   if (!session) return;
 
+  // Carga inicial de perfiles de proveedores
+  await cargarPerfilesGuardados();
+  
+  // Carga de inventario
   await cargarProductos();
 
+  // Suscripción Realtime a la tabla productos
   supabase.channel('inv-cambios')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, () => {
       cargarProductos();
@@ -55,6 +121,10 @@ async function cargarProductos() {
   llenarFiltros();
   renderTabla();
 }
+
+// ══════════════════════════════════════════════════════════
+// KPIs Y TABLA PRINCIPAL
+// ══════════════════════════════════════════════════════════
 
 function actualizarKPIs() {
   const total = todosProductos.length;
@@ -107,6 +177,7 @@ function sortIcon(col) {
 function renderTabla() {
   let productos = todosProductos;
 
+  // Aplicar filtros
   if (filtroCategoria) productos = productos.filter(p => p.categoria === filtroCategoria);
   if (filtroProveedor) productos = productos.filter(p => p.proveedor === filtroProveedor);
   if (filtroStock === 'critico') productos = productos.filter(p => p.stock_actual <= p.stock_minimo);
@@ -123,12 +194,14 @@ function renderTabla() {
     );
   }
 
+  // Aplicar orden
   productos = [...productos].sort((a, b) => {
     let va = a[sortCol] ?? '', vb = b[sortCol] ?? '';
     const res = typeof va === 'string' ? va.localeCompare(vb, 'es') : va - vb;
     return sortDir === 'asc' ? res : -res;
   });
 
+  // Actualizar indicadores visuales de orden en cabecera
   const thMap = {
     nombre: 'th-nombre', stock_actual: 'th-stock', precio_venta: 'th-pventa',
     precio_costo: 'th-pcosto', proveedor: 'th-proveedor'
@@ -189,6 +262,7 @@ function renderTabla() {
   }).join('');
 }
 
+// Event Listeners Filtros
 document.getElementById('filtro-categoria').addEventListener('change', e => { filtroCategoria = e.target.value; renderTabla(); });
 document.getElementById('filtro-proveedor').addEventListener('change', e => { filtroProveedor = e.target.value; renderTabla(); });
 document.getElementById('filtro-stock').addEventListener('change', e => { filtroStock = e.target.value; renderTabla(); });
@@ -200,7 +274,7 @@ document.getElementById('busqueda').addEventListener('input', e => {
 });
 
 // ══════════════════════════════════════════════════════════
-// MODALES
+// MODALES MANUALES (Editar, Ajustar, Nuevo)
 // ══════════════════════════════════════════════════════════
 
 window.editarProducto = (id) => {
@@ -292,17 +366,19 @@ document.getElementById('form-nuevo-inventario').addEventListener('submit', asyn
     precio_venta: parseFloat(fd.get('precio_venta')), precio_costo: parseFloat(fd.get('precio_costo')),
     stock_actual: parseInt(fd.get('stock_actual')) || 0, stock_minimo: parseInt(fd.get('stock_minimo')) || 5
   };
+  
+  const btn = e.target.querySelector('[type=submit]');
+  btn.disabled = true;
   const { error } = await supabase.from('productos').insert(producto);
-  if (error) { showToast('Error', 'error'); return; }
+  btn.disabled = false;
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
   showToast('Producto agregado', 'success');
   document.getElementById('modal-nuevo').classList.add('hidden');
   cargarProductos();
 });
 
-init();
-
 // ══════════════════════════════════════════════════════════
-// CARGA MASIVA (Escáner + Excel/CSV Dinámico Avanzado)
+// CARGA MASIVA AVANZADA (ESCANER + EXCEL CON CORTADOR DE BASURA)
 // ══════════════════════════════════════════════════════════
 
 let bulkScanner = null;
@@ -313,8 +389,8 @@ let headersExtraidos = [];
 
 document.getElementById('btn-carga-masiva').addEventListener('click', () => {
   bulkCount = 0;
+  cargarPerfilesGuardados(); // Refresca lista en caso de cambios externos
   document.getElementById('modal-carga-masiva').classList.remove('hidden');
-  document.getElementById('csv-proveedor-selector').dispatchEvent(new Event('change'));
 });
 
 document.getElementById('btn-cerrar-masiva').addEventListener('click', async () => {
@@ -340,15 +416,17 @@ document.querySelectorAll('.csv-mode-btn').forEach(btn => {
     const target = e.target;
     target.classList.add('active'); target.style.background = 'var(--teal-dim)'; target.style.color = 'var(--teal)';
     currentCsvMode = target.dataset.mode;
+    
     document.getElementById('csv-mode-upload').style.display = currentCsvMode === 'upload' ? 'block' : 'none';
     document.getElementById('csv-mode-new-prov').style.display = currentCsvMode === 'new-prov' ? 'block' : 'none';
+    document.getElementById('csv-mode-manage-prov').style.display = currentCsvMode === 'manage-prov' ? 'block' : 'none';
+    
     document.getElementById('csv-preview').innerHTML = '';
     document.getElementById('btn-importar-csv').style.display = 'none';
-    document.getElementById('new-prov-mapping').style.display = 'none';
   });
 });
 
-// Dropzones para Excel
+// ── Dropzones Excel ──
 const csvInput = document.getElementById('csv-input');
 const drops = [document.getElementById('csv-drop-zone-upload'), document.getElementById('csv-drop-zone-template')];
 
@@ -364,7 +442,6 @@ drops.forEach(drop => {
 
 csvInput.addEventListener('change', () => { if (csvInput.files[0]) procesarArchivoExcelOCSV(csvInput.files[0]); });
 
-// ── LA MAGIA: PARSER INTELIGENTE DE EXCEL / CSV ──
 function procesarArchivoExcelOCSV(file) {
   if (!window.XLSX) {
     showToast('Aguardá un segundo, cargando librería Excel...', 'warning'); return;
@@ -376,15 +453,13 @@ function procesarArchivoExcelOCSV(file) {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: 'array' });
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      
-      // Leemos como matriz para ver el caos en crudo
       const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
+      
       if (rows.length < 2) { showToast('El archivo está vacío', 'warning'); return; }
 
-      // 1. CAZADOR DE CABECERAS: Buscar la fila que más parezca un encabezado (max 100 filas)
-      const keywords = ['código', 'codigo', 'descripción', 'descripcion', 'producto', 'artículo', 'articulo', 'precio', 'ean', 'barra', 'rubro', 'categoría', 'talle', 'detalle'];
-      let headerIndex = 0;
-      let maxScore = 0;
+      // Búsqueda inteligente de cabecera (ignorar "basura" de arriba)
+      const keywords = ['código', 'codigo', 'descripción', 'descripcion', 'producto', 'artículo', 'articulo', 'precio', 'ean', 'barra', 'rubro', 'categoría', 'talle', 'detalle', 'unitario'];
+      let headerIndex = 0; let maxScore = 0;
 
       for (let i = 0; i < Math.min(rows.length, 100); i++) {
         const row = rows[i];
@@ -397,42 +472,30 @@ function procesarArchivoExcelOCSV(file) {
         if (score > maxScore) { maxScore = score; headerIndex = i; }
       }
 
-      // 2. EXTRAER CABECERA REAL Y REPARARLA
       const rawHeaders = rows[headerIndex];
       const headers = [];
-      const headerCounts = {}; // Para evitar duplicados como "UNITARIO" dos veces en Care-Quip
+      const headerCounts = {}; 
 
       for (let i = 0; i < rawHeaders.length; i++) {
         let h = String(rawHeaders[i] || '').toLowerCase().trim();
-        
-        // Si Dema manda una columna sin nombre, la inventamos
-        if (!h) h = `columna_${i + 1}`; 
-
-        // Si Care-Quip repite nombres, los numeramos
-        if (headerCounts[h]) {
-            headerCounts[h]++;
-            h = `${h}_${headerCounts[h]}`;
-        } else {
-            headerCounts[h] = 1;
-        }
+        if (!h) h = `columna_${i + 1}`; // Bautizar columnas vacías
+        if (headerCounts[h]) { headerCounts[h]++; h = `${h}_${headerCounts[h]}`; } 
+        else { headerCounts[h] = 1; }
         headers.push(h);
       }
 
-      // 3. AISLAR LOS DATOS REALES (Todo lo que está debajo de la cabecera)
+      // Filtrar filas completamente en blanco
       const validDataRows = rows.slice(headerIndex + 1).filter(r => r.length > 0 && r.some(c => c !== '' && c !== undefined && c !== null));
 
       const dataObjects = validDataRows.map(rowArray => {
         const obj = {};
-        headers.forEach((h, i) => {
-          obj[h] = rowArray[i] !== undefined ? rowArray[i] : '';
-        });
+        headers.forEach((h, i) => { obj[h] = rowArray[i] !== undefined ? rowArray[i] : ''; });
         return obj;
       });
 
-      // 4. DERIVAR FLUJO SEGÚN EL MODO
       if (currentCsvMode === 'upload') {
-        procesarDataConProveedor(headers, dataObjects);
-      } else {
+        aplicarPerfilYMostrar(dataObjects);
+      } else if (currentCsvMode === 'new-prov') {
         headersExtraidos = [...new Set(headers.filter(h => h !== ''))];
         armarUIAsignacionDeColumnas(headersExtraidos);
       }
@@ -462,11 +525,7 @@ function armarUIAsignacionDeColumnas(headersFile) {
     headersFile.forEach(h => {
       let selected = '';
       const terminos = keyDb === 'nombre' ? ['descrip', 'articul', 'nombre', 'detalle'] : [keyDb.split('_')[0]]; 
-      
-      // Autoselección inteligente
-      if (!yaSeleccionado && terminos.some(t => h.includes(t))) {
-        selected = 'selected'; yaSeleccionado = true;
-      }
+      if (!yaSeleccionado && terminos.some(t => h.includes(t))) { selected = 'selected'; yaSeleccionado = true; }
       options += `<option value="${h}" ${selected}>Columna Excel: ${h}</option>`;
     });
 
@@ -479,56 +538,67 @@ function armarUIAsignacionDeColumnas(headersFile) {
 
   document.getElementById('mapping-fields').innerHTML = html;
   document.getElementById('new-prov-mapping').style.display = 'block';
-  showToast('Excel leído. Revisá cómo quedaron asignadas las columnas.', 'success');
+  showToast('Excel analizado. Revisá la asignación de columnas.', 'success');
 }
 
-document.getElementById('btn-save-provider').addEventListener('click', () => {
+// Guardado de Perfil en la Nube
+document.getElementById('btn-save-provider').addEventListener('click', async () => {
   const nombreProv = document.getElementById('new-prov-name').value.trim();
   if (!nombreProv) { showToast('Falta el nombre del proveedor', 'warning'); return; }
 
   const idProv = nombreProv.toLowerCase().replace(/[^a-z0-9]/g, '');
   const mapeoActual = {};
-  document.querySelectorAll('.map-select').forEach(sel => { mapeoActual[sel.dataset.db] = sel.value; });
+  document.querySelectorAll('.map-select').forEach(sel => { 
+    if(sel.value) mapeoActual[sel.dataset.db] = sel.value; 
+  });
 
-  // Guardamos el perfil en nuestro diccionario
-  configProveedores[idProv] = {
-    nombreDB: nombreProv,
-    esperadas: Object.values(mapeoActual).filter(v => v !== ''),
-    mapRow: (row) => ({
-      nombre: mapeoActual.nombre && row[mapeoActual.nombre] ? String(row[mapeoActual.nombre]) : 'Sin nombre',
-      ean: mapeoActual.ean && row[mapeoActual.ean] ? String(row[mapeoActual.ean]) : null,
-      categoria: mapeoActual.categoria && row[mapeoActual.categoria] ? String(row[mapeoActual.categoria]) : 'General',
-      proveedor: nombreProv,
-      precio_venta: mapeoActual.precio_venta ? parseFloat(row[mapeoActual.precio_venta]) : 0,
-      precio_costo: mapeoActual.precio_costo ? parseFloat(row[mapeoActual.precio_costo]) : 0,
-      stock_actual: 0,
-      stock_minimo: 5
-    })
-  };
+  const btn = document.getElementById('btn-save-provider');
+  btn.disabled = true;
+  btn.textContent = 'Guardando en la nube...';
 
-  const selector = document.getElementById('csv-proveedor-selector');
-  const opt = document.createElement('option'); opt.value = idProv; opt.textContent = nombreProv;
-  selector.appendChild(opt);
+  const { error } = await supabase.from('perfiles_proveedores').upsert({
+    id: idProv,
+    nombre: nombreProv,
+    mapeo: mapeoActual
+  });
 
-  showToast(`Perfil de ${nombreProv} guardado.`, 'success');
+  btn.disabled = false;
+  btn.textContent = '💾 Guardar Perfil Permanente';
+
+  if (error) { showToast('Error al guardar en Supabase: ' + error.message, 'error'); return; }
+
+  showToast(`Perfil de ${nombreProv} guardado en la nube.`, 'success');
+  
+  await cargarPerfilesGuardados(); 
+  
   document.querySelector('.csv-mode-btn[data-mode="upload"]').click();
-  selector.value = idProv; selector.dispatchEvent(new Event('change'));
+  document.getElementById('csv-proveedor-selector').value = idProv;
+  document.getElementById('new-prov-name').value = ''; 
 });
 
-function procesarDataConProveedor(headers, dataObjects) {
+function aplicarPerfilYMostrar(dataObjects) {
   const proveedorKey = document.getElementById('csv-proveedor-selector').value;
   const config = configProveedores[proveedorKey];
 
   if (!config) { showToast('Perfil de proveedor no encontrado', 'error'); return; }
+  const m = config.mapeo;
 
-  // Verificamos si faltan columnas vitales según el perfil
-  const missing = config.esperadas.filter(r => !headers.includes(r));
-  if (missing.length) {
-    showToast(`Cuidado: En este Excel faltan las columnas: ${missing.join(', ')}. ¿Cambió el formato el proveedor?`, 'error'); 
-    return;
-  }
+  csvData = dataObjects.map(rowObj => {
+    // Si no tiene nombre mapeado (o la columna del excel está vacía), lo ignoramos
+    if(m.nombre && !rowObj[m.nombre]) return null;
 
-  csvData = dataObjects.map(rowObj => config.mapRow(rowObj)).filter(r => r.nombre !== 'Sin nombre');
+    return {
+      nombre: m.nombre && rowObj[m.nombre] ? String(rowObj[m.nombre]) : 'Sin nombre',
+      ean: m.ean && rowObj[m.ean] ? String(rowObj[m.ean]) : null,
+      categoria: m.categoria && rowObj[m.categoria] ? String(rowObj[m.categoria]) : 'General',
+      proveedor: config.nombreDB,
+      precio_venta: m.precio_venta && rowObj[m.precio_venta] ? parseFloat(rowObj[m.precio_venta]) : 0,
+      precio_costo: m.precio_costo && rowObj[m.precio_costo] ? parseFloat(rowObj[m.precio_costo]) : 0,
+      stock_actual: 0,
+      stock_minimo: 5
+    };
+  }).filter(r => r !== null && r.nombre !== 'Sin nombre');
+
   renderCSVPreview();
 }
 
@@ -544,7 +614,7 @@ function renderCSVPreview() {
   const btn = document.getElementById('btn-importar-csv');
 
   if (csvData.length === 0) {
-    el.innerHTML = '<p style="color:var(--text-muted);font-size:0.867rem">No se encontraron productos válidos.</p>';
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:0.867rem">No se encontraron productos válidos o las columnas del archivo no coinciden con el perfil elegido.</p>';
     btn.style.display = 'none'; return;
   }
 
@@ -554,7 +624,7 @@ function renderCSVPreview() {
   el.innerHTML = `
     <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px">
       ${csvData.length} productos detectados 
-      ${conWarnings.length ? `· <span style="color:var(--amber)">⚠️ ${conWarnings.length} con problemas de precio</span>` : '· <span style="color:var(--green)">✅ Datos limpios</span>'}
+      ${conWarnings.length ? `· <span style="color:var(--amber)">⚠️ ${conWarnings.length} con problemas de precio</span>` : '· <span style="color:var(--green)">✅ Datos listos</span>'}
     </div>
     <div class="table-wrap">
       <table>
@@ -602,13 +672,101 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
 
   btn.disabled = false;
   showToast(`${ok} guardados ${errores.length ? ` · Hubo ${errores.length} errores` : ''}`, errores.length > 0 ? 'warning' : 'success', 6000);
-  previewEl.innerHTML = `<div style="color:var(--green);font-size:0.9rem;font-weight:600">✅ Importación finalizada.</div>`;
+  previewEl.innerHTML = `<div style="color:var(--green);font-size:0.9rem;font-weight:600">✅ Importación finalizada con éxito.</div>`;
   csvData = []; btn.style.display = 'none';
   cargarProductos();
 });
 
-// Selector Hint inicial
-document.getElementById('csv-proveedor-selector').addEventListener('change', (e) => {
-  const p = configProveedores[e.target.value];
-  document.getElementById('csv-columnas-esperadas').innerHTML = p ? `Columnas: <strong>${p.esperadas.join(', ')}</strong>` : '';
+// ── Lógica del Escáner Rápido ──
+document.getElementById('btn-iniciar-scan-bulk').addEventListener('click', async () => {
+  const container = document.getElementById('scan-bulk-container');
+  container.style.display = '';
+  document.getElementById('btn-iniciar-scan-bulk').style.display = 'none';
+
+  const formats = [
+    Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.QR_CODE,
+  ];
+  bulkScanner = new Html5Qrcode('scan-bulk-container', { formatsToSupport: formats, verbose: false });
+  try {
+    await bulkScanner.start({ facingMode: 'environment' }, { fps: 15, qrbox: { width: 280, height: 100 } }, onBulkEAN, () => {});
+  } catch {
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (devices?.length) await bulkScanner.start(devices[0].id, { fps: 15, qrbox: { width: 280, height: 100 } }, onBulkEAN, () => {});
+    } catch (err2) {
+      showToast('Error de cámara: ' + (err2?.message || String(err2)), 'error');
+      container.style.display = 'none';
+      document.getElementById('btn-iniciar-scan-bulk').style.display = '';
+    }
+  }
 });
+
+async function detenerScanBulk() {
+  if (bulkScanner) { try { await bulkScanner.stop(); bulkScanner.clear(); } catch(e){} bulkScanner = null; }
+  document.getElementById('scan-bulk-container').style.display = 'none';
+}
+
+async function onBulkEAN(ean) {
+  await detenerScanBulk();
+  const { data } = await supabase.from('productos').select('id,nombre').eq('ean', ean).maybeSingle();
+  if (data) {
+    showToast(`Ya existe: ${data.nombre}`, 'warning', 2500);
+    reiniciarScanBulk(); return;
+  }
+
+  document.getElementById('bulk-ean-detectado').textContent = ean;
+  document.getElementById('bulk-nombre').value = ''; document.getElementById('bulk-categoria').value = '';
+  document.getElementById('bulk-proveedor').value = ''; document.getElementById('bulk-precio-venta').value = '';
+  document.getElementById('bulk-precio-costo').value = ''; document.getElementById('bulk-stock').value = '1';
+  document.getElementById('bulk-stock-min').value = '5';
+  document.getElementById('bulk-scan-form').style.display = '';
+
+  const cats = [...new Set(todosProductos.map(p => p.categoria).filter(Boolean))].sort().slice(0, 8);
+  document.getElementById('bulk-cat-sugerencias').innerHTML = cats.map(c => `<button type="button" class="btn btn-secondary" style="padding:3px 10px;font-size:11px" onclick="document.getElementById('bulk-categoria').value='${c}'">${c}</button>`).join('');
+  setTimeout(() => document.getElementById('bulk-nombre').focus(), 100);
+}
+
+document.getElementById('btn-guardar-bulk').addEventListener('click', async () => {
+  const nombre = document.getElementById('bulk-nombre').value.trim();
+  const categoria = document.getElementById('bulk-categoria').value.trim();
+  const precio_venta = parseFloat(document.getElementById('bulk-precio-venta').value);
+  const ean = document.getElementById('bulk-ean-detectado').textContent;
+
+  if (!nombre || !categoria || !precio_venta) { showToast('Nombre, categoría y precio venta son obligatorios', 'warning'); return; }
+
+  const btn = document.getElementById('btn-guardar-bulk'); btn.disabled = true;
+
+  const { error } = await supabase.from('productos').insert({
+    ean, sku: `EAN-${ean}`, nombre, categoria,
+    proveedor: document.getElementById('bulk-proveedor').value.trim() || null,
+    precio_venta, precio_costo: parseFloat(document.getElementById('bulk-precio-costo').value) || 0,
+    stock_actual: parseInt(document.getElementById('bulk-stock').value) || 1,
+    stock_minimo: parseInt(document.getElementById('bulk-stock-min').value) || 5,
+  });
+
+  btn.disabled = false;
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  bulkCount++; document.getElementById('scan-counter').innerHTML = `${bulkCount} <span>cargados hoy</span>`;
+  showToast(`${nombre} guardado`, 'success', 1500); reiniciarScanBulk();
+});
+
+document.getElementById('btn-skip-bulk').addEventListener('click', reiniciarScanBulk);
+
+async function reiniciarScanBulk() {
+  document.getElementById('bulk-scan-form').style.display = 'none';
+  document.getElementById('scan-bulk-container').style.display = '';
+  document.getElementById('btn-iniciar-scan-bulk').style.display = 'none';
+  bulkScanner = new Html5Qrcode('scan-bulk-container');
+  try { await bulkScanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 250, height: 160 } }, onBulkEAN, () => {});
+  } catch (err) {
+    document.getElementById('scan-bulk-container').style.display = 'none';
+    document.getElementById('btn-iniciar-scan-bulk').style.display = '';
+  }
+}
+
+// Inicializar Script
+init();
