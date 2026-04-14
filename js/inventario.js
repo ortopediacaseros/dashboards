@@ -10,7 +10,7 @@ let sortCol = 'nombre';
 let sortDir = 'asc';
 
 // ══════════════════════════════════════════════════════════
-// CONFIGURACIÓN DE PROVEEDORES (Diccionario base)
+// CONFIGURACIÓN DE PROVEEDORES
 // ══════════════════════════════════════════════════════════
 const configProveedores = {
   generico: {
@@ -50,7 +50,7 @@ const configProveedores = {
       categoria: row.rubro,
       proveedor: 'Silfab',
       precio_venta: parseFloat(row.precio_sugerido),
-      precio_costo: parseFloat(row.precio_sugerido) * 0.7, // Ejemplo asumiendo 30% margen si no mandan costo
+      precio_costo: parseFloat(row.precio_sugerido) * 0.7, 
       stock_actual: 0,
       stock_minimo: 2
     })
@@ -153,7 +153,6 @@ function renderTabla() {
     );
   }
 
-  // Ordenar
   productos = [...productos].sort((a, b) => {
     let va = a[sortCol] ?? '', vb = b[sortCol] ?? '';
     const res = typeof va === 'string' ? va.localeCompare(vb, 'es') : va - vb;
@@ -222,7 +221,6 @@ function renderTabla() {
   }).join('');
 }
 
-// Eventos Filtros Principales
 document.getElementById('filtro-categoria').addEventListener('change', e => {
   filtroCategoria = e.target.value; renderTabla();
 });
@@ -242,10 +240,9 @@ document.getElementById('busqueda').addEventListener('input', e => {
 });
 
 // ══════════════════════════════════════════════════════════
-// MODALES: EDITAR, AJUSTAR STOCK Y NUEVO
+// MODALES (Editar, Ajustar, Nuevo)
 // ══════════════════════════════════════════════════════════
 
-// Modal Editar
 window.editarProducto = (id) => {
   const p = todosProductos.find(x => x.id === id);
   if (!p) return;
@@ -265,8 +262,7 @@ document.getElementById('btn-cerrar-editar').addEventListener('click', () => {
   document.getElementById('modal-editar').classList.add('hidden');
 });
 document.getElementById('modal-editar').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal-editar'))
-    document.getElementById('modal-editar').classList.add('hidden');
+  if (e.target === document.getElementById('modal-editar')) document.getElementById('modal-editar').classList.add('hidden');
 });
 
 document.getElementById('form-editar').addEventListener('submit', async (e) => {
@@ -293,7 +289,6 @@ document.getElementById('form-editar').addEventListener('submit', async (e) => {
   cargarProductos();
 });
 
-// Modal Ajustar
 window.ajustarStock = (id, nombre, stockActual) => {
   document.getElementById('ajuste-id').value = id;
   document.getElementById('ajuste-nombre').textContent = nombre;
@@ -340,7 +335,6 @@ document.getElementById('form-ajuste').addEventListener('submit', async (e) => {
   cargarProductos();
 });
 
-// Modal Nuevo
 document.getElementById('btn-agregar').addEventListener('click', () => {
   document.getElementById('form-nuevo-inventario').reset();
   document.getElementById('modal-nuevo').classList.remove('hidden');
@@ -360,8 +354,7 @@ document.getElementById('form-nuevo-inventario').addEventListener('submit', asyn
   const sku = ean ? `EAN-${ean}` : `SKU-${Date.now()}`;
 
   const producto = {
-    ean,
-    sku,
+    ean, sku,
     nombre: fd.get('nombre'),
     categoria: fd.get('categoria'),
     proveedor: fd.get('proveedor').trim() || null,
@@ -385,7 +378,7 @@ document.getElementById('form-nuevo-inventario').addEventListener('submit', asyn
 init();
 
 // ══════════════════════════════════════════════════════════
-// CARGA MASIVA (Escáner + CSV Dual Mode)
+// CARGA MASIVA (Escáner + Excel/CSV Dual Mode)
 // ══════════════════════════════════════════════════════════
 
 let bulkScanner = null;
@@ -443,8 +436,7 @@ document.getElementById('btn-iniciar-scan-bulk').addEventListener('click', async
     await bulkScanner.start(
       { facingMode: 'environment' },
       { fps: 15, qrbox: { width: 280, height: 100 } },
-      onBulkEAN,
-      () => {}
+      onBulkEAN, () => {}
     );
   } catch {
     try {
@@ -545,12 +537,11 @@ async function reiniciarScanBulk() {
   }
 }
 
-// ── 2. Importar CSV (Dual Mode) ──
+// ── 2. Importar Excel/CSV via SheetJS (Dual Mode) ──
 
 let currentCsvMode = 'upload'; 
 let headersExtraidos = []; 
 
-// Cambiar Hint visual según proveedor seleccionado en modo Carga
 document.getElementById('csv-proveedor-selector').addEventListener('change', (e) => {
   const prov = e.target.value;
   if (configProveedores[prov]) {
@@ -558,7 +549,6 @@ document.getElementById('csv-proveedor-selector').addEventListener('change', (e)
   }
 });
 
-// Toggle Modes
 document.querySelectorAll('.csv-mode-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     document.querySelectorAll('.csv-mode-btn').forEach(b => {
@@ -590,44 +580,69 @@ drops.forEach(drop => {
   drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
   drop.addEventListener('drop', e => {
     e.preventDefault(); drop.classList.remove('dragover');
-    if (e.dataTransfer.files[0]) procesarCSVFront(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files[0]) procesarArchivoExcelOCSV(e.dataTransfer.files[0]);
   });
 });
 
-csvInput.addEventListener('change', () => { if (csvInput.files[0]) procesarCSVFront(csvInput.files[0]); });
+csvInput.addEventListener('change', () => { if (csvInput.files[0]) procesarArchivoExcelOCSV(csvInput.files[0]); });
 
-function parseCSVLine(line) {
-  const vals = [];
-  let cur = '', inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
-      else inQ = !inQ;
-    } else if (ch === ',' && !inQ) {
-      vals.push(cur.trim()); cur = '';
-    } else cur += ch;
+function procesarArchivoExcelOCSV(file) {
+  if (!window.XLSX) {
+    showToast('La librería para procesar Excel aún no cargó. Intentá en 2 segundos.', 'warning');
+    return;
   }
-  vals.push(cur.trim());
-  return vals;
-}
 
-function procesarCSVFront(file) {
   const reader = new FileReader();
+  
+  // Usamos readAsArrayBuffer para que SheetJS lea el Excel en crudo correctamente
   reader.onload = e => {
-    const lines = e.target.result.split('\n').map(l => l.trim()).filter(l => l);
-    if (lines.length < 2) { showToast('El CSV está vacío', 'warning'); return; }
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      
+      // header: 1 nos devuelve un Array de Arrays (para aislar los nombres de las columnas)
+      const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      
+      // Filtramos filas que estén totalmente vacías
+      const validRows = rows.filter(r => r.length > 0 && r.some(c => c !== '' && c !== undefined && c !== null));
+      
+      if (validRows.length < 2) { 
+        showToast('El archivo está vacío o solo tiene la cabecera', 'warning'); 
+        return; 
+      }
 
-    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+      // Procesamos las cabeceras limpiándolas
+      const rawHeaders = validRows[0];
+      const headers = rawHeaders.map(h => String(h || '').toLowerCase().trim());
 
-    if (currentCsvMode === 'upload') {
-      procesarDataConProveedor(headers, lines.slice(1));
-    } else {
-      headersExtraidos = headers;
-      armarUIAsignacionDeColumnas(headersExtraidos);
+      // Mapeamos el resto de las filas a un diccionario {columna: valor}
+      const dataObjects = validRows.slice(1).map(rowArray => {
+        const obj = {};
+        headers.forEach((h, i) => {
+          obj[h] = rowArray[i] !== undefined ? rowArray[i] : '';
+        });
+        return obj;
+      });
+
+      if (currentCsvMode === 'upload') {
+        procesarDataConProveedor(headers, dataObjects);
+      } else {
+        // Para evitar duplicidad de columnas vacías en los dropdowns
+        headersExtraidos = [...new Set(headers.filter(h => h !== ''))];
+        armarUIAsignacionDeColumnas(headersExtraidos);
+      }
+
+    } catch (err) {
+      showToast('Error al leer el archivo. ¿Es un Excel o CSV válido?', 'error');
+      console.error(err);
     }
   };
-  reader.readAsText(file);
+  
+  reader.readAsArrayBuffer(file);
+  csvInput.value = ''; // Reset input
 }
 
 function armarUIAsignacionDeColumnas(headersFile) {
@@ -642,8 +657,20 @@ function armarUIAsignacionDeColumnas(headersFile) {
   let html = '';
   for (const [keyDb, labelUI] of Object.entries(camposRequeridos)) {
     let options = `<option value="">-- No importar --</option>`;
+    
+    // Bandera para no seleccionar múltiples opciones
+    let yaSeleccionado = false;
+
     headersFile.forEach(h => {
-      const selected = h.includes(keyDb.split('_')[0]) ? 'selected' : '';
+      let selected = '';
+      const terminoBusqueda = keyDb.split('_')[0]; 
+      
+      // Heurística de selección inteligente (solo selecciona el primero que coincide)
+      if (!yaSeleccionado && h.includes(terminoBusqueda)) {
+        selected = 'selected';
+        yaSeleccionado = true;
+      }
+      
       options += `<option value="${h}" ${selected}>Columna: ${h}</option>`;
     });
 
@@ -661,7 +688,6 @@ function armarUIAsignacionDeColumnas(headersFile) {
   showToast('Columnas leídas con éxito. Revisá las asignaciones.', 'success');
 }
 
-// Guardar perfil dinámico
 document.getElementById('btn-save-provider').addEventListener('click', () => {
   const nombreProv = document.getElementById('new-prov-name').value.trim();
   if (!nombreProv) { showToast('Falta el nombre del proveedor', 'warning'); return; }
@@ -677,9 +703,9 @@ document.getElementById('btn-save-provider').addEventListener('click', () => {
     nombreDB: nombreProv,
     esperadas: Object.values(mapeoActual).filter(v => v !== ''),
     mapRow: (row) => ({
-      nombre: mapeoActual.nombre ? row[mapeoActual.nombre] : 'Sin nombre',
-      ean: mapeoActual.ean ? row[mapeoActual.ean] : null,
-      categoria: mapeoActual.categoria ? row[mapeoActual.categoria] : 'General',
+      nombre: mapeoActual.nombre && row[mapeoActual.nombre] ? String(row[mapeoActual.nombre]) : 'Sin nombre',
+      ean: mapeoActual.ean && row[mapeoActual.ean] ? String(row[mapeoActual.ean]) : null,
+      categoria: mapeoActual.categoria && row[mapeoActual.categoria] ? String(row[mapeoActual.categoria]) : 'General',
       proveedor: nombreProv,
       precio_venta: mapeoActual.precio_venta ? parseFloat(row[mapeoActual.precio_venta]) : 0,
       precio_costo: mapeoActual.precio_costo ? parseFloat(row[mapeoActual.precio_costo]) : 0,
@@ -700,8 +726,7 @@ document.getElementById('btn-save-provider').addEventListener('click', () => {
   selector.dispatchEvent(new Event('change'));
 });
 
-// Procesar datos finales según perfil
-function procesarDataConProveedor(headers, dataLines) {
+function procesarDataConProveedor(headers, dataObjects) {
   const proveedorKey = document.getElementById('csv-proveedor-selector').value;
   const config = configProveedores[proveedorKey];
 
@@ -712,11 +737,8 @@ function procesarDataConProveedor(headers, dataLines) {
     showToast(`El formato no coincide. Faltan las columnas: ${missing.join(', ')}`, 'error'); return;
   }
 
-  csvData = dataLines.map(line => {
-    const vals = parseCSVLine(line);
-    const rowObjetoBruto = {};
-    headers.forEach((h, i) => rowObjetoBruto[h] = vals[i] || '');
-    return config.mapRow(rowObjetoBruto);
+  csvData = dataObjects.map(rowObj => {
+    return config.mapRow(rowObj);
   }).filter(r => r.nombre !== 'Sin nombre');
 
   renderCSVPreview();
@@ -728,7 +750,7 @@ function validarCSVRow(r) {
   const pc = parseFloat(r.precio_costo);
   if (!pv || pv <= 0 || isNaN(pv)) warnings.push('precio_venta vacío o inválido');
   if (pc < 0 || isNaN(pc)) warnings.push('precio_costo negativo o inválido');
-  if (r.ean && (r.ean.length < 8 || isNaN(Number(r.ean)))) warnings.push('EAN con formato sospechoso');
+  if (r.ean && (String(r.ean).length < 8 || isNaN(Number(r.ean)))) warnings.push('EAN con formato sospechoso');
   return warnings;
 }
 
@@ -785,8 +807,8 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
   const errores = [];
 
   for (const row of csvData) {
-    const ean = row.ean?.trim() || null;
-    const sku = row.sku?.trim() || (ean ? `EAN-${ean}` : `SKU-${Date.now()}-${Math.random().toString(36).slice(2,6)}`);
+    const ean = row.ean ? String(row.ean).trim() : null;
+    const sku = row.sku ? String(row.sku).trim() : (ean ? `EAN-${ean}` : `SKU-${Date.now()}-${Math.random().toString(36).slice(2,6)}`);
     const producto = {
       ean, sku,
       nombre: row.nombre,
