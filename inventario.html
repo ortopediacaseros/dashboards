@@ -321,22 +321,18 @@
       </div>
 
       <div class="bulk-panel" id="panel-csv">
+        
         <div style="display:flex; gap:10px; margin-bottom:16px; background:var(--bg-body, #eee); padding:4px; border-radius:var(--radius-sm); border:1px solid var(--border);">
-          <button class="btn btn-secondary csv-mode-btn active" data-mode="upload" style="flex:1; border:none; background:var(--teal-dim); color:var(--teal); font-weight:600;">📦 Subir Inventario</button>
-          <button class="btn btn-secondary csv-mode-btn" data-mode="new-prov" style="flex:1; border:none; background:transparent;">➕ Nuevo Proveedor</button>
+          <button class="btn btn-secondary csv-mode-btn active" data-mode="upload" style="flex:1; border:none; background:var(--teal-dim); color:var(--teal); font-weight:600; padding:8px 4px; font-size:12px;">📦 Subir Inventario</button>
+          <button class="btn btn-secondary csv-mode-btn" data-mode="new-prov" style="flex:1; border:none; background:transparent; padding:8px 4px; font-size:12px;">➕ Nuevo Perfil</button>
+          <button class="btn btn-secondary csv-mode-btn" data-mode="manage-prov" style="flex:1; border:none; background:transparent; padding:8px 4px; font-size:12px;">⚙️ Gestionar</button>
         </div>
 
         <div id="csv-mode-upload">
           <div class="form-group">
             <label style="font-weight:600">1. Elegir Proveedor</label>
             <select class="select" id="csv-proveedor-selector" style="width: 100%;">
-              <option value="generico">Genérico (Formato Ortopedia Caseros)</option>
-              <option value="dema">Dema</option>
-              <option value="silfab">Silfab</option>
-            </select>
-            <div id="csv-columnas-esperadas" style="font-size:11px; color:var(--text-dim); margin-top:6px;">
-              Columnas esperadas: nombre, ean, categoria, proveedor, precio_venta, precio_costo, stock_actual, stock_minimo
-            </div>
+              </select>
           </div>
 
           <div class="form-group" style="margin-top:16px;">
@@ -355,10 +351,10 @@
             <input type="text" class="input" id="new-prov-name" placeholder="Ej: PTM, Eurohosp...">
           </div>
           <div class="form-group">
-            <label style="font-weight:600">Subir template de prueba</label>
+            <label style="font-weight:600">Subir Excel de prueba</label>
             <div class="csv-drop" id="csv-drop-zone-template">
               <div style="font-size:24px;margin-bottom:8px">⚙️</div>
-              <strong>Arrastrá un archivo Excel o CSV de este proveedor</strong>
+              <strong>Arrastrá un archivo Excel de este proveedor</strong>
               <p style="color:var(--text-muted);font-size:11px;margin-top:4px">Leeremos las columnas para armar el perfil</p>
             </div>
           </div>
@@ -367,8 +363,14 @@
             <strong style="display:block; margin-bottom:12px; font-size:13px; color:var(--teal)">Enlazar columnas:</strong>
             <p style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">Asigná a qué equivale cada dato de nuestra base de datos según las columnas del Excel de este proveedor.</p>
             <div id="mapping-fields" style="display:flex; flex-direction:column; gap:8px;"></div>
-            <button class="btn btn-primary btn-full" id="btn-save-provider" style="margin-top:16px;">💾 Guardar Perfil de Proveedor</button>
+            <button class="btn btn-primary btn-full" id="btn-save-provider" style="margin-top:16px;">💾 Guardar Perfil Permanente</button>
           </div>
+        </div>
+
+        <div id="csv-mode-manage-prov" style="display:none;">
+          <label style="font-weight:600; margin-bottom:10px; display:block;">Perfiles Guardados</label>
+          <div id="lista-perfiles-guardados" style="display:flex; flex-direction:column; gap:8px;">
+            </div>
         </div>
 
         <input type="file" id="csv-input" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" style="display:none">
