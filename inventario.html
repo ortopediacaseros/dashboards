@@ -6,7 +6,10 @@
   <title>Inventario — Ortopedia Caseros</title>
   <script>if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');</script>
   <link rel="stylesheet" href="css/styles.css">
+  
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  
   <style>
     .bulk-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px; }
     .bulk-tab {
@@ -263,7 +266,7 @@
 
       <div class="bulk-tabs">
         <button class="bulk-tab active" data-tab="scan">📷 Escaneo rápido</button>
-        <button class="bulk-tab" data-tab="csv">📋 Importar CSV</button>
+        <button class="bulk-tab" data-tab="csv">📋 Importar Excel/CSV</button>
       </div>
 
       <div class="bulk-panel active" id="panel-scan">
@@ -339,8 +342,8 @@
           <div class="form-group" style="margin-top:16px;">
             <label style="font-weight:600">2. Subir lista de precios</label>
             <div class="csv-drop" id="csv-drop-zone-upload">
-              <div style="font-size:24px;margin-bottom:8px">📋</div>
-              <strong>Arrastrá el CSV del proveedor aquí</strong>
+              <div style="font-size:24px;margin-bottom:8px">📊</div>
+              <strong>Arrastrá el archivo Excel (.xlsx) o CSV aquí</strong>
               <p style="color:var(--text-muted);font-size:11px;margin-top:4px">Se aplicará el formato automáticamente</p>
             </div>
           </div>
@@ -355,7 +358,7 @@
             <label style="font-weight:600">Subir template de prueba</label>
             <div class="csv-drop" id="csv-drop-zone-template">
               <div style="font-size:24px;margin-bottom:8px">⚙️</div>
-              <strong>Arrastrá un CSV de este proveedor aquí</strong>
+              <strong>Arrastrá un archivo Excel o CSV de este proveedor</strong>
               <p style="color:var(--text-muted);font-size:11px;margin-top:4px">Leeremos las columnas para armar el perfil</p>
             </div>
           </div>
@@ -368,7 +371,7 @@
           </div>
         </div>
 
-        <input type="file" id="csv-input" accept=".csv" style="display:none">
+        <input type="file" id="csv-input" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" style="display:none">
         <div id="csv-preview" style="margin-top:14px"></div>
         <button class="btn btn-primary btn-full" id="btn-importar-csv" style="margin-top:14px;display:none">
           ✅ Importar productos
