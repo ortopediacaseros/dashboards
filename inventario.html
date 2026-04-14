@@ -89,6 +89,9 @@
           <select class="select" id="filtro-categoria" style="min-width:180px">
             <option value="">Todas las categorías</option>
           </select>
+          <select class="select" id="filtro-proveedor" style="min-width:180px">
+            <option value="">Todos los proveedores</option>
+          </select>
           <select class="select" id="filtro-stock" style="min-width:160px">
             <option value="">Todo el stock</option>
             <option value="critico">🔴 Crítico</option>
@@ -104,6 +107,7 @@
                 <th id="th-nombre" data-label="Producto" onclick="setSortCol('nombre')" style="cursor:pointer;user-select:none">Producto</th>
                 <th>SKU</th>
                 <th>EAN</th>
+                <th id="th-proveedor" data-label="Proveedor" onclick="setSortCol('proveedor')" style="cursor:pointer;user-select:none">Proveedor</th>
                 <th id="th-stock" data-label="Stock" onclick="setSortCol('stock_actual')" style="cursor:pointer;user-select:none">Stock</th>
                 <th>Mín.</th>
                 <th id="th-pventa" data-label="P. Venta" onclick="setSortCol('precio_venta')" style="cursor:pointer;user-select:none">P. Venta</th>
@@ -113,7 +117,7 @@
               </tr>
             </thead>
             <tbody id="inventario-tbody">
-              <tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:32px">Cargando...</td></tr>
+              <tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:32px">Cargando...</td></tr>
             </tbody>
           </table>
         </div>
@@ -128,7 +132,6 @@
     <a href="index.html"><span class="icon">📊</span>Panel</a>
   </nav>
 
-  <!-- Modal editar -->
   <div class="modal-overlay hidden" id="modal-editar">
     <div class="modal">
       <div class="modal-header">
@@ -141,9 +144,15 @@
           <label>Nombre</label>
           <input type="text" class="input" id="edit-nombre" required>
         </div>
-        <div class="form-group">
-          <label>Categoría</label>
-          <input type="text" class="input" id="edit-categoria" required>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Categoría</label>
+            <input type="text" class="input" id="edit-categoria" required>
+          </div>
+          <div class="form-group">
+            <label>Proveedor</label>
+            <input type="text" class="input" id="edit-proveedor">
+          </div>
         </div>
         <div class="form-group">
           <label>EAN (opcional)</label>
@@ -168,7 +177,6 @@
     </div>
   </div>
 
-  <!-- Modal ajustar stock -->
   <div class="modal-overlay hidden" id="modal-ajuste">
     <div class="modal" style="max-width:360px">
       <div class="modal-header">
@@ -196,7 +204,6 @@
     </div>
   </div>
 
-  <!-- Modal nuevo -->
   <div class="modal-overlay hidden" id="modal-nuevo">
     <div class="modal">
       <div class="modal-header">
@@ -212,9 +219,15 @@
           <label>Nombre *</label>
           <input type="text" class="input" name="nombre" required>
         </div>
-        <div class="form-group">
-          <label>Categoría *</label>
-          <input type="text" class="input" name="categoria" required>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Categoría *</label>
+            <input type="text" class="input" name="categoria" required>
+          </div>
+          <div class="form-group">
+            <label>Proveedor</label>
+            <input type="text" class="input" name="proveedor" placeholder="Opcional">
+          </div>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -241,7 +254,6 @@
     </div>
   </div>
 
-  <!-- Modal carga masiva -->
   <div class="modal-overlay hidden" id="modal-carga-masiva">
     <div class="modal" style="max-width:560px">
       <div class="modal-header">
@@ -254,7 +266,6 @@
         <button class="bulk-tab" data-tab="csv">📋 Importar CSV</button>
       </div>
 
-      <!-- Panel escaneo -->
       <div class="bulk-panel active" id="panel-scan">
         <div class="scan-counter" id="scan-counter">0 <span>productos cargados en esta sesión</span></div>
         <div id="scan-bulk-container" style="border-radius:var(--radius);overflow:hidden;background:#000;margin-bottom:14px;display:none"></div>
@@ -268,10 +279,16 @@
             <label>Nombre *</label>
             <input type="text" class="input" id="bulk-nombre" required placeholder="Ej: Muleta aluminio talle M">
           </div>
-          <div class="form-group">
-            <label>Categoría *</label>
-            <input type="text" class="input" id="bulk-categoria" required placeholder="Ej: Muletas">
-            <div id="bulk-cat-sugerencias" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Categoría *</label>
+              <input type="text" class="input" id="bulk-categoria" required placeholder="Ej: Muletas">
+              <div id="bulk-cat-sugerencias" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+            </div>
+            <div class="form-group">
+              <label>Proveedor</label>
+              <input type="text" class="input" id="bulk-proveedor" placeholder="Ej: Importador Norte">
+            </div>
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -300,18 +317,58 @@
         </div>
       </div>
 
-      <!-- Panel CSV -->
       <div class="bulk-panel" id="panel-csv">
-        <div class="csv-drop" id="csv-drop-zone">
-          <div style="font-size:32px;margin-bottom:8px">📋</div>
-          <strong>Arrastrá el CSV aquí</strong>
-          <p style="color:var(--text-muted);font-size:12px;margin-top:6px">o hacé clic para seleccionar</p>
-          <input type="file" id="csv-input" accept=".csv" style="display:none">
+        <div style="display:flex; gap:10px; margin-bottom:16px; background:var(--bg-body, #eee); padding:4px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+          <button class="btn btn-secondary csv-mode-btn active" data-mode="upload" style="flex:1; border:none; background:var(--teal-dim); color:var(--teal); font-weight:600;">📦 Subir Inventario</button>
+          <button class="btn btn-secondary csv-mode-btn" data-mode="new-prov" style="flex:1; border:none; background:transparent;">➕ Nuevo Proveedor</button>
         </div>
-        <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:12px;color:var(--text-dim)">Columnas: nombre, ean, categoria, precio_venta, precio_costo, stock_actual, stock_minimo</span>
-          <button class="btn btn-secondary" id="btn-descargar-template" style="padding:5px 10px;font-size:12px">⬇ Template</button>
+
+        <div id="csv-mode-upload">
+          <div class="form-group">
+            <label style="font-weight:600">1. Elegir Proveedor</label>
+            <select class="select" id="csv-proveedor-selector" style="width: 100%;">
+              <option value="generico">Genérico (Formato Ortopedia Caseros)</option>
+              <option value="dema">Dema</option>
+              <option value="silfab">Silfab</option>
+            </select>
+            <div id="csv-columnas-esperadas" style="font-size:11px; color:var(--text-dim); margin-top:6px;">
+              Columnas esperadas: nombre, ean, categoria, proveedor, precio_venta, precio_costo, stock_actual, stock_minimo
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label style="font-weight:600">2. Subir lista de precios</label>
+            <div class="csv-drop" id="csv-drop-zone-upload">
+              <div style="font-size:24px;margin-bottom:8px">📋</div>
+              <strong>Arrastrá el CSV del proveedor aquí</strong>
+              <p style="color:var(--text-muted);font-size:11px;margin-top:4px">Se aplicará el formato automáticamente</p>
+            </div>
+          </div>
         </div>
+
+        <div id="csv-mode-new-prov" style="display:none;">
+          <div class="form-group">
+            <label style="font-weight:600">Nombre del Proveedor</label>
+            <input type="text" class="input" id="new-prov-name" placeholder="Ej: PTM, Eurohosp...">
+          </div>
+          <div class="form-group">
+            <label style="font-weight:600">Subir template de prueba</label>
+            <div class="csv-drop" id="csv-drop-zone-template">
+              <div style="font-size:24px;margin-bottom:8px">⚙️</div>
+              <strong>Arrastrá un CSV de este proveedor aquí</strong>
+              <p style="color:var(--text-muted);font-size:11px;margin-top:4px">Leeremos las columnas para armar el perfil</p>
+            </div>
+          </div>
+          
+          <div id="new-prov-mapping" style="display:none; background:var(--bg-card, #fff); padding:16px; border:1px solid var(--teal); border-radius:var(--radius-sm); margin-top:16px;">
+            <strong style="display:block; margin-bottom:12px; font-size:13px; color:var(--teal)">Enlazar columnas:</strong>
+            <p style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">Asigná a qué equivale cada dato de nuestra base de datos según las columnas del Excel de este proveedor.</p>
+            <div id="mapping-fields" style="display:flex; flex-direction:column; gap:8px;"></div>
+            <button class="btn btn-primary btn-full" id="btn-save-provider" style="margin-top:16px;">💾 Guardar Perfil de Proveedor</button>
+          </div>
+        </div>
+
+        <input type="file" id="csv-input" accept=".csv" style="display:none">
         <div id="csv-preview" style="margin-top:14px"></div>
         <button class="btn btn-primary btn-full" id="btn-importar-csv" style="margin-top:14px;display:none">
           ✅ Importar productos
