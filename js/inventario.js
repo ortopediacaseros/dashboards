@@ -549,4 +549,66 @@ function renderCSVPreview() {
   }
 
   const conWarnings = csvData.filter(r => validarCSVRow(r).length > 0);
-  const preview = csvData.slice(0,
+  const preview = csvData.slice(0, 8);
+
+  el.innerHTML = `
+    <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px">
+      ${csvData.length} productos detectados 
+      ${conWarnings.length ? `· <span style="color:var(--amber)">⚠️ ${conWarnings.length} con problemas de precio</span>` : '· <span style="color:var(--green)">✅ Datos limpios</span>'}
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Producto</th><th>Prov.</th><th>Precio</th><th>Costo</th><th></th></tr></thead>
+        <tbody>
+          ${preview.map(r => {
+            const warns = validarCSVRow(r);
+            return `<tr style="${warns.length ? 'background:var(--amber-dim)' : ''}">
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nombre}</td>
+              <td style="font-size:0.8rem;color:var(--teal)">${r.proveedor || '—'}</td>
+              <td style="color:var(--teal)">${r.precio_venta ? '$' + parseFloat(r.precio_venta).toLocaleString('es-AR') : '—'}</td>
+              <td style="color:var(--text-muted)">${r.precio_costo ? '$' + parseFloat(r.precio_costo).toLocaleString('es-AR') : '—'}</td>
+              <td style="font-size:0.7rem;color:var(--amber)">${warns.join(', ')}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${csvData.length > 8 ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">…y ${csvData.length - 8} más</div>` : ''}`;
+
+  btn.style.display = '';
+  btn.textContent = `✅ Subir ${csvData.length} productos`;
+}
+
+document.getElementById('btn-importar-csv').addEventListener('click', async () => {
+  if (!csvData.length) return;
+  const btn = document.getElementById('btn-importar-csv');
+  const previewEl = document.getElementById('csv-preview');
+  btn.disabled = true; btn.textContent = 'Guardando en base de datos...';
+
+  let ok = 0; const errores = [];
+  for (const row of csvData) {
+    const ean = row.ean ? String(row.ean).trim() : null;
+    const sku = ean ? `EAN-${ean}` : `SKU-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    
+    let error;
+    if (ean) {
+      ({ error } = await supabase.from('productos').upsert({ ean, sku, ...row }, { onConflict: 'ean' }));
+    } else {
+      ({ error } = await supabase.from('productos').insert({ sku, ...row }));
+    }
+    if (error) errores.push({ nombre: row.nombre, motivo: error.message });
+    else ok++;
+  }
+
+  btn.disabled = false;
+  showToast(`${ok} guardados ${errores.length ? ` · Hubo ${errores.length} errores` : ''}`, errores.length > 0 ? 'warning' : 'success', 6000);
+  previewEl.innerHTML = `<div style="color:var(--green);font-size:0.9rem;font-weight:600">✅ Importación finalizada.</div>`;
+  csvData = []; btn.style.display = 'none';
+  cargarProductos();
+});
+
+// Selector Hint inicial
+document.getElementById('csv-proveedor-selector').addEventListener('change', (e) => {
+  const p = configProveedores[e.target.value];
+  document.getElementById('csv-columnas-esperadas').innerHTML = p ? `Columnas: <strong>${p.esperadas.join(', ')}</strong>` : '';
+});
