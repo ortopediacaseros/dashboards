@@ -3,10 +3,59 @@ import { checkAuth } from './auth.js';
 
 let todosProductos = [];
 let filtroCategoria = '';
+let filtroProveedor = ''; 
 let filtroStock = '';
 let filtroTexto = '';
 let sortCol = 'nombre';
 let sortDir = 'asc';
+
+// ══════════════════════════════════════════════════════════
+// CONFIGURACIÓN DE PROVEEDORES (Diccionario base)
+// ══════════════════════════════════════════════════════════
+const configProveedores = {
+  generico: {
+    nombreDB: 'Genérico',
+    esperadas: ['nombre', 'ean', 'categoria', 'proveedor', 'precio_venta', 'precio_costo', 'stock_actual', 'stock_minimo'],
+    mapRow: (row) => ({
+      nombre: row.nombre,
+      ean: row.ean,
+      categoria: row.categoria,
+      proveedor: row.proveedor || null,
+      precio_venta: parseFloat(row.precio_venta),
+      precio_costo: parseFloat(row.precio_costo),
+      stock_actual: parseInt(row.stock_actual) || 0,
+      stock_minimo: parseInt(row.stock_minimo) || 5
+    })
+  },
+  dema: {
+    nombreDB: 'Dema',
+    esperadas: ['descripcion', 'codigo_barra', 'linea', 'precio_publico', 'costo'],
+    mapRow: (row) => ({
+      nombre: row.descripcion,
+      ean: row.codigo_barra,
+      categoria: row.linea,
+      proveedor: 'Dema',
+      precio_venta: parseFloat(row.precio_publico),
+      precio_costo: parseFloat(row.costo),
+      stock_actual: 0,
+      stock_minimo: 5
+    })
+  },
+  silfab: {
+    nombreDB: 'Silfab',
+    esperadas: ['articulo', 'ean', 'rubro', 'precio_sugerido'],
+    mapRow: (row) => ({
+      nombre: row.articulo,
+      ean: row.ean,
+      categoria: row.rubro,
+      proveedor: 'Silfab',
+      precio_venta: parseFloat(row.precio_sugerido),
+      precio_costo: parseFloat(row.precio_sugerido) * 0.7, // Ejemplo asumiendo 30% margen si no mandan costo
+      stock_actual: 0,
+      stock_minimo: 2
+    })
+  }
+};
 
 async function init() {
   const session = await checkAuth();
@@ -48,16 +97,28 @@ function actualizarKPIs() {
 }
 
 function llenarFiltros() {
-  const cats = [...new Set(todosProductos.map(p => p.categoria))].sort();
-  const sel = document.getElementById('filtro-categoria');
-  const current = sel.value;
-  sel.innerHTML = '<option value="">Todas las categorías</option>';
+  const cats = [...new Set(todosProductos.map(p => p.categoria).filter(Boolean))].sort();
+  const selCat = document.getElementById('filtro-categoria');
+  const currentCat = selCat.value;
+  selCat.innerHTML = '<option value="">Todas las categorías</option>';
   cats.forEach(c => {
     const opt = document.createElement('option');
     opt.value = c;
     opt.textContent = c;
-    if (c === current) opt.selected = true;
-    sel.appendChild(opt);
+    if (c === currentCat) opt.selected = true;
+    selCat.appendChild(opt);
+  });
+
+  const provs = [...new Set(todosProductos.map(p => p.proveedor).filter(Boolean))].sort();
+  const selProv = document.getElementById('filtro-proveedor');
+  const currentProv = selProv.value;
+  selProv.innerHTML = '<option value="">Todos los proveedores</option>';
+  provs.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p;
+    if (p === currentProv) opt.selected = true;
+    selProv.appendChild(opt);
   });
 }
 
@@ -77,6 +138,7 @@ function renderTabla() {
   let productos = todosProductos;
 
   if (filtroCategoria) productos = productos.filter(p => p.categoria === filtroCategoria);
+  if (filtroProveedor) productos = productos.filter(p => p.proveedor === filtroProveedor);
   if (filtroStock === 'critico') productos = productos.filter(p => p.stock_actual <= p.stock_minimo);
   if (filtroStock === 'bajo') productos = productos.filter(p => p.stock_actual > p.stock_minimo && p.stock_actual <= p.stock_minimo * 1.5);
   if (filtroStock === 'ok') productos = productos.filter(p => p.stock_actual > p.stock_minimo * 1.5);
@@ -86,7 +148,8 @@ function renderTabla() {
       p.nombre.toLowerCase().includes(q) ||
       p.sku?.toLowerCase().includes(q) ||
       p.ean?.includes(q) ||
-      p.categoria.toLowerCase().includes(q)
+      p.categoria?.toLowerCase().includes(q) ||
+      p.proveedor?.toLowerCase().includes(q)
     );
   }
 
@@ -97,10 +160,9 @@ function renderTabla() {
     return sortDir === 'asc' ? res : -res;
   });
 
-  // Actualizar headers con indicador de orden
   const thMap = {
     nombre: 'th-nombre', stock_actual: 'th-stock', precio_venta: 'th-pventa',
-    precio_costo: 'th-pcosto', categoria: 'th-cat'
+    precio_costo: 'th-pcosto', proveedor: 'th-proveedor'
   };
   Object.entries(thMap).forEach(([col, id]) => {
     const el = document.getElementById(id);
@@ -109,7 +171,7 @@ function renderTabla() {
 
   const tbody = document.getElementById('inventario-tbody');
   if (productos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:32px">Sin productos</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:32px">Sin productos</td></tr>`;
     return;
   }
 
@@ -137,6 +199,7 @@ function renderTabla() {
         </td>
         <td style="font-size:12px;color:var(--text-muted)">${p.sku}</td>
         <td style="font-size:12px;color:var(--text-dim)">${p.ean || '—'}</td>
+        <td style="font-size:12px;color:var(--teal);font-weight:500">${p.proveedor || '—'}</td>
         <td>
           <div class="stk">
             <span class="${stockClass}" style="min-width:24px;text-align:right">${p.stock_actual}</span>
@@ -159,27 +222,30 @@ function renderTabla() {
   }).join('');
 }
 
-// Filtros
+// Eventos Filtros Principales
 document.getElementById('filtro-categoria').addEventListener('change', e => {
-  filtroCategoria = e.target.value;
-  renderTabla();
+  filtroCategoria = e.target.value; renderTabla();
 });
-
+document.getElementById('filtro-proveedor').addEventListener('change', e => {
+  filtroProveedor = e.target.value; renderTabla();
+});
 document.getElementById('filtro-stock').addEventListener('change', e => {
-  filtroStock = e.target.value;
-  renderTabla();
+  filtroStock = e.target.value; renderTabla();
 });
 
 let searchTimer;
 document.getElementById('busqueda').addEventListener('input', e => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
-    filtroTexto = e.target.value.trim();
-    renderTabla();
+    filtroTexto = e.target.value.trim(); renderTabla();
   }, 200);
 });
 
-// Modal editar
+// ══════════════════════════════════════════════════════════
+// MODALES: EDITAR, AJUSTAR STOCK Y NUEVO
+// ══════════════════════════════════════════════════════════
+
+// Modal Editar
 window.editarProducto = (id) => {
   const p = todosProductos.find(x => x.id === id);
   if (!p) return;
@@ -188,6 +254,7 @@ window.editarProducto = (id) => {
   document.getElementById('edit-id').value = p.id;
   document.getElementById('edit-nombre').value = p.nombre;
   document.getElementById('edit-categoria').value = p.categoria;
+  document.getElementById('edit-proveedor').value = p.proveedor || '';
   document.getElementById('edit-ean').value = p.ean || '';
   document.getElementById('edit-precio-venta').value = p.precio_venta;
   document.getElementById('edit-precio-costo').value = p.precio_costo;
@@ -197,7 +264,6 @@ window.editarProducto = (id) => {
 document.getElementById('btn-cerrar-editar').addEventListener('click', () => {
   document.getElementById('modal-editar').classList.add('hidden');
 });
-
 document.getElementById('modal-editar').addEventListener('click', e => {
   if (e.target === document.getElementById('modal-editar'))
     document.getElementById('modal-editar').classList.add('hidden');
@@ -209,6 +275,7 @@ document.getElementById('form-editar').addEventListener('submit', async (e) => {
   const updates = {
     nombre: document.getElementById('edit-nombre').value,
     categoria: document.getElementById('edit-categoria').value,
+    proveedor: document.getElementById('edit-proveedor').value.trim() || null,
     ean: document.getElementById('edit-ean').value.trim() || null,
     precio_venta: parseFloat(document.getElementById('edit-precio-venta').value),
     precio_costo: parseFloat(document.getElementById('edit-precio-costo').value),
@@ -226,7 +293,7 @@ document.getElementById('form-editar').addEventListener('submit', async (e) => {
   cargarProductos();
 });
 
-// Modal ajustar stock
+// Modal Ajustar
 window.ajustarStock = (id, nombre, stockActual) => {
   document.getElementById('ajuste-id').value = id;
   document.getElementById('ajuste-nombre').textContent = nombre;
@@ -249,10 +316,8 @@ document.getElementById('ajuste-cantidad').addEventListener('input', e => {
 document.getElementById('btn-cerrar-ajuste').addEventListener('click', () => {
   document.getElementById('modal-ajuste').classList.add('hidden');
 });
-
 document.getElementById('modal-ajuste').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal-ajuste'))
-    document.getElementById('modal-ajuste').classList.add('hidden');
+  if (e.target === document.getElementById('modal-ajuste')) document.getElementById('modal-ajuste').classList.add('hidden');
 });
 
 document.getElementById('form-ajuste').addEventListener('submit', async (e) => {
@@ -275,7 +340,7 @@ document.getElementById('form-ajuste').addEventListener('submit', async (e) => {
   cargarProductos();
 });
 
-// Modal nuevo producto
+// Modal Nuevo
 document.getElementById('btn-agregar').addEventListener('click', () => {
   document.getElementById('form-nuevo-inventario').reset();
   document.getElementById('modal-nuevo').classList.remove('hidden');
@@ -284,10 +349,8 @@ document.getElementById('btn-agregar').addEventListener('click', () => {
 document.getElementById('btn-cerrar-nuevo').addEventListener('click', () => {
   document.getElementById('modal-nuevo').classList.add('hidden');
 });
-
 document.getElementById('modal-nuevo').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal-nuevo'))
-    document.getElementById('modal-nuevo').classList.add('hidden');
+  if (e.target === document.getElementById('modal-nuevo')) document.getElementById('modal-nuevo').classList.add('hidden');
 });
 
 document.getElementById('form-nuevo-inventario').addEventListener('submit', async (e) => {
@@ -301,6 +364,7 @@ document.getElementById('form-nuevo-inventario').addEventListener('submit', asyn
     sku,
     nombre: fd.get('nombre'),
     categoria: fd.get('categoria'),
+    proveedor: fd.get('proveedor').trim() || null,
     precio_venta: parseFloat(fd.get('precio_venta')),
     precio_costo: parseFloat(fd.get('precio_costo')),
     stock_actual: parseInt(fd.get('stock_actual')) || 0,
@@ -321,18 +385,18 @@ document.getElementById('form-nuevo-inventario').addEventListener('submit', asyn
 init();
 
 // ══════════════════════════════════════════════════════════
-// CARGA MASIVA
+// CARGA MASIVA (Escáner + CSV Dual Mode)
 // ══════════════════════════════════════════════════════════
 
 let bulkScanner = null;
 let bulkCount = 0;
 let csvData = [];
 
-// Abrir / cerrar modal
 document.getElementById('btn-carga-masiva').addEventListener('click', () => {
   bulkCount = 0;
   actualizarContador();
   document.getElementById('modal-carga-masiva').classList.remove('hidden');
+  document.getElementById('csv-proveedor-selector').dispatchEvent(new Event('change'));
 });
 
 document.getElementById('btn-cerrar-masiva').addEventListener('click', cerrarMasiva);
@@ -348,7 +412,6 @@ async function cerrarMasiva() {
   if (bulkCount > 0) cargarProductos();
 }
 
-// Tabs
 document.querySelectorAll('.bulk-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.bulk-tab').forEach(t => t.classList.remove('active'));
@@ -358,8 +421,7 @@ document.querySelectorAll('.bulk-tab').forEach(tab => {
   });
 });
 
-// ── Escaneo rápido ───────────────────────────────────────
-
+// ── 1. Escaneo rápido ──
 function actualizarContador() {
   document.getElementById('scan-counter').innerHTML =
     `${bulkCount} <span>producto${bulkCount !== 1 ? 's' : ''} cargado${bulkCount !== 1 ? 's' : ''} en esta sesión</span>`;
@@ -389,7 +451,7 @@ document.getElementById('btn-iniciar-scan-bulk').addEventListener('click', async
       const devices = await Html5Qrcode.getCameras();
       if (devices?.length) await bulkScanner.start(devices[0].id, { fps: 15, qrbox: { width: 280, height: 100 } }, onBulkEAN, () => {});
     } catch (err2) {
-      showToast('Error al acceder a la cámara: ' + (err2?.message || String(err2)), 'error');
+      showToast('Error de cámara: ' + (err2?.message || String(err2)), 'error');
       container.style.display = 'none';
       document.getElementById('btn-iniciar-scan-bulk').style.display = '';
     }
@@ -406,8 +468,6 @@ async function detenerScanBulk() {
 
 async function onBulkEAN(ean) {
   await detenerScanBulk();
-
-  // Verificar si ya existe
   const { data } = await supabase.from('productos').select('id,nombre').eq('ean', ean).maybeSingle();
   if (data) {
     showToast(`Ya existe: ${data.nombre}`, 'warning', 2500);
@@ -415,18 +475,17 @@ async function onBulkEAN(ean) {
     return;
   }
 
-  // Mostrar form
   document.getElementById('bulk-ean-detectado').textContent = ean;
   document.getElementById('bulk-nombre').value = '';
   document.getElementById('bulk-categoria').value = '';
+  document.getElementById('bulk-proveedor').value = ''; 
   document.getElementById('bulk-precio-venta').value = '';
   document.getElementById('bulk-precio-costo').value = '';
   document.getElementById('bulk-stock').value = '1';
   document.getElementById('bulk-stock-min').value = '5';
   document.getElementById('bulk-scan-form').style.display = '';
 
-  // Sugerencias de categorías existentes
-  const cats = [...new Set(todosProductos.map(p => p.categoria))].sort().slice(0, 8);
+  const cats = [...new Set(todosProductos.map(p => p.categoria).filter(Boolean))].sort().slice(0, 8);
   document.getElementById('bulk-cat-sugerencias').innerHTML = cats.map(c =>
     `<button type="button" class="btn btn-secondary" style="padding:3px 10px;font-size:11px"
       onclick="document.getElementById('bulk-categoria').value='${c}'">${c}</button>`
@@ -442,18 +501,15 @@ document.getElementById('btn-guardar-bulk').addEventListener('click', async () =
   const ean = document.getElementById('bulk-ean-detectado').textContent;
 
   if (!nombre || !categoria || !precio_venta) {
-    showToast('Nombre, categoría y precio venta son obligatorios', 'warning');
-    return;
+    showToast('Nombre, categoría y precio venta son obligatorios', 'warning'); return;
   }
 
   const btn = document.getElementById('btn-guardar-bulk');
   btn.disabled = true;
 
   const { error } = await supabase.from('productos').insert({
-    ean,
-    sku: `EAN-${ean}`,
-    nombre,
-    categoria,
+    ean, sku: `EAN-${ean}`, nombre, categoria,
+    proveedor: document.getElementById('bulk-proveedor').value.trim() || null,
     precio_venta,
     precio_costo: parseFloat(document.getElementById('bulk-precio-costo').value) || 0,
     stock_actual: parseInt(document.getElementById('bulk-stock').value) || 1,
@@ -461,7 +517,6 @@ document.getElementById('btn-guardar-bulk').addEventListener('click', async () =
   });
 
   btn.disabled = false;
-
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
 
   bulkCount++;
@@ -474,10 +529,6 @@ document.getElementById('btn-skip-bulk').addEventListener('click', reiniciarScan
 
 async function reiniciarScanBulk() {
   document.getElementById('bulk-scan-form').style.display = 'none';
-  document.getElementById('btn-iniciar-scan-bulk').style.display = '';
-  document.getElementById('scan-bulk-container').style.display = 'none';
-
-  // Reiniciar escáner automáticamente
   const container = document.getElementById('scan-bulk-container');
   container.style.display = '';
   document.getElementById('btn-iniciar-scan-bulk').style.display = 'none';
@@ -486,8 +537,7 @@ async function reiniciarScanBulk() {
     await bulkScanner.start(
       { facingMode: 'environment' },
       { fps: 10, qrbox: { width: 250, height: 160 } },
-      onBulkEAN,
-      () => {}
+      onBulkEAN, () => {}
     );
   } catch (err) {
     container.style.display = 'none';
@@ -495,19 +545,56 @@ async function reiniciarScanBulk() {
   }
 }
 
-// ── Importar CSV ─────────────────────────────────────────
+// ── 2. Importar CSV (Dual Mode) ──
 
-const csvDrop = document.getElementById('csv-drop-zone');
-const csvInput = document.getElementById('csv-input');
+let currentCsvMode = 'upload'; 
+let headersExtraidos = []; 
 
-csvDrop.addEventListener('click', () => csvInput.click());
-csvDrop.addEventListener('dragover', e => { e.preventDefault(); csvDrop.classList.add('dragover'); });
-csvDrop.addEventListener('dragleave', () => csvDrop.classList.remove('dragover'));
-csvDrop.addEventListener('drop', e => {
-  e.preventDefault(); csvDrop.classList.remove('dragover');
-  if (e.dataTransfer.files[0]) procesarCSV(e.dataTransfer.files[0]);
+// Cambiar Hint visual según proveedor seleccionado en modo Carga
+document.getElementById('csv-proveedor-selector').addEventListener('change', (e) => {
+  const prov = e.target.value;
+  if (configProveedores[prov]) {
+    document.getElementById('csv-columnas-esperadas').innerHTML = `Columnas esperadas: <strong>${configProveedores[prov].esperadas.join(', ')}</strong>`;
+  }
 });
-csvInput.addEventListener('change', () => { if (csvInput.files[0]) procesarCSV(csvInput.files[0]); });
+
+// Toggle Modes
+document.querySelectorAll('.csv-mode-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    document.querySelectorAll('.csv-mode-btn').forEach(b => {
+      b.classList.remove('active');
+      b.style.background = 'transparent';
+      b.style.color = 'var(--text-main)';
+    });
+    const target = e.target;
+    target.classList.add('active');
+    target.style.background = 'var(--teal-dim)';
+    target.style.color = 'var(--teal)';
+
+    currentCsvMode = target.dataset.mode;
+    
+    document.getElementById('csv-mode-upload').style.display = currentCsvMode === 'upload' ? 'block' : 'none';
+    document.getElementById('csv-mode-new-prov').style.display = currentCsvMode === 'new-prov' ? 'block' : 'none';
+    document.getElementById('csv-preview').innerHTML = '';
+    document.getElementById('btn-importar-csv').style.display = 'none';
+    document.getElementById('new-prov-mapping').style.display = 'none';
+  });
+});
+
+const csvInput = document.getElementById('csv-input');
+const drops = [document.getElementById('csv-drop-zone-upload'), document.getElementById('csv-drop-zone-template')];
+
+drops.forEach(drop => {
+  drop.addEventListener('click', () => csvInput.click());
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault(); drop.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) procesarCSVFront(e.dataTransfer.files[0]);
+  });
+});
+
+csvInput.addEventListener('change', () => { if (csvInput.files[0]) procesarCSVFront(csvInput.files[0]); });
 
 function parseCSVLine(line) {
   const vals = [];
@@ -525,41 +612,123 @@ function parseCSVLine(line) {
   return vals;
 }
 
-function procesarCSV(file) {
+function procesarCSVFront(file) {
   const reader = new FileReader();
   reader.onload = e => {
     const lines = e.target.result.split('\n').map(l => l.trim()).filter(l => l);
-    if (lines.length < 2) { showToast('El CSV está vacío o solo tiene encabezado', 'warning'); return; }
+    if (lines.length < 2) { showToast('El CSV está vacío', 'warning'); return; }
 
-    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
-    const required = ['nombre', 'precio_venta', 'categoria'];
-    const missing = required.filter(r => !headers.includes(r));
-    if (missing.length) {
-      showToast(`Faltan columnas: ${missing.join(', ')}`, 'error');
-      return;
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+
+    if (currentCsvMode === 'upload') {
+      procesarDataConProveedor(headers, lines.slice(1));
+    } else {
+      headersExtraidos = headers;
+      armarUIAsignacionDeColumnas(headersExtraidos);
     }
-
-    csvData = lines.slice(1).map(line => {
-      const vals = parseCSVLine(line);
-      const obj = {};
-      headers.forEach((h, i) => obj[h] = vals[i] || '');
-      return obj;
-    }).filter(r => r.nombre);
-
-    renderCSVPreview();
   };
   reader.readAsText(file);
+}
+
+function armarUIAsignacionDeColumnas(headersFile) {
+  const camposRequeridos = {
+    'nombre': 'Nombre / Descripción *',
+    'ean': 'EAN / Código de Barras',
+    'categoria': 'Categoría / Rubro',
+    'precio_venta': 'Precio de Venta *',
+    'precio_costo': 'Precio de Costo'
+  };
+
+  let html = '';
+  for (const [keyDb, labelUI] of Object.entries(camposRequeridos)) {
+    let options = `<option value="">-- No importar --</option>`;
+    headersFile.forEach(h => {
+      const selected = h.includes(keyDb.split('_')[0]) ? 'selected' : '';
+      options += `<option value="${h}" ${selected}>Columna: ${h}</option>`;
+    });
+
+    html += `
+      <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+        <span style="font-weight:500; width:45%;">${labelUI}</span>
+        <select class="select map-select" data-db="${keyDb}" style="width:50%; padding:4px;">
+          ${options}
+        </select>
+      </div>`;
+  }
+
+  document.getElementById('mapping-fields').innerHTML = html;
+  document.getElementById('new-prov-mapping').style.display = 'block';
+  showToast('Columnas leídas con éxito. Revisá las asignaciones.', 'success');
+}
+
+// Guardar perfil dinámico
+document.getElementById('btn-save-provider').addEventListener('click', () => {
+  const nombreProv = document.getElementById('new-prov-name').value.trim();
+  if (!nombreProv) { showToast('Falta el nombre del proveedor', 'warning'); return; }
+
+  const idProv = nombreProv.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const mapeoActual = {};
+  
+  document.querySelectorAll('.map-select').forEach(sel => {
+    mapeoActual[sel.dataset.db] = sel.value;
+  });
+
+  configProveedores[idProv] = {
+    nombreDB: nombreProv,
+    esperadas: Object.values(mapeoActual).filter(v => v !== ''),
+    mapRow: (row) => ({
+      nombre: mapeoActual.nombre ? row[mapeoActual.nombre] : 'Sin nombre',
+      ean: mapeoActual.ean ? row[mapeoActual.ean] : null,
+      categoria: mapeoActual.categoria ? row[mapeoActual.categoria] : 'General',
+      proveedor: nombreProv,
+      precio_venta: mapeoActual.precio_venta ? parseFloat(row[mapeoActual.precio_venta]) : 0,
+      precio_costo: mapeoActual.precio_costo ? parseFloat(row[mapeoActual.precio_costo]) : 0,
+      stock_actual: 0,
+      stock_minimo: 5
+    })
+  };
+
+  const selector = document.getElementById('csv-proveedor-selector');
+  const opt = document.createElement('option');
+  opt.value = idProv;
+  opt.textContent = nombreProv;
+  selector.appendChild(opt);
+
+  showToast(`Proveedor ${nombreProv} configurado con éxito`, 'success');
+  document.querySelector('.csv-mode-btn[data-mode="upload"]').click();
+  selector.value = idProv;
+  selector.dispatchEvent(new Event('change'));
+});
+
+// Procesar datos finales según perfil
+function procesarDataConProveedor(headers, dataLines) {
+  const proveedorKey = document.getElementById('csv-proveedor-selector').value;
+  const config = configProveedores[proveedorKey];
+
+  if (!config) { showToast('Proveedor no configurado', 'error'); return; }
+
+  const missing = config.esperadas.filter(r => !headers.includes(r));
+  if (missing.length) {
+    showToast(`El formato no coincide. Faltan las columnas: ${missing.join(', ')}`, 'error'); return;
+  }
+
+  csvData = dataLines.map(line => {
+    const vals = parseCSVLine(line);
+    const rowObjetoBruto = {};
+    headers.forEach((h, i) => rowObjetoBruto[h] = vals[i] || '');
+    return config.mapRow(rowObjetoBruto);
+  }).filter(r => r.nombre !== 'Sin nombre');
+
+  renderCSVPreview();
 }
 
 function validarCSVRow(r) {
   const warnings = [];
   const pv = parseFloat(r.precio_venta);
   const pc = parseFloat(r.precio_costo);
-  const sa = parseInt(r.stock_actual);
-  if (!pv || pv <= 0) warnings.push('precio_venta vacío o cero');
-  if (pc < 0) warnings.push('precio_costo negativo');
-  if (sa > 9999) warnings.push(`stock_actual sospechoso (${sa}) — ¿se corrieron columnas?`);
-  if (r.ean && (r.ean.length < 8 || isNaN(Number(r.ean)))) warnings.push('EAN inválido');
+  if (!pv || pv <= 0 || isNaN(pv)) warnings.push('precio_venta vacío o inválido');
+  if (pc < 0 || isNaN(pc)) warnings.push('precio_costo negativo o inválido');
+  if (r.ean && (r.ean.length < 8 || isNaN(Number(r.ean)))) warnings.push('EAN con formato sospechoso');
   return warnings;
 }
 
@@ -569,8 +738,7 @@ function renderCSVPreview() {
 
   if (csvData.length === 0) {
     el.innerHTML = '<p style="color:var(--text-muted);font-size:0.867rem">No se encontraron filas válidas</p>';
-    btn.style.display = 'none';
-    return;
+    btn.style.display = 'none'; return;
   }
 
   const conWarnings = csvData.filter(r => validarCSVRow(r).length > 0);
@@ -578,33 +746,29 @@ function renderCSVPreview() {
 
   el.innerHTML = `
     <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px">
-      ${csvData.length} productos encontrados
+      ${csvData.length} productos listos para procesar
       ${conWarnings.length ? `· <span style="color:var(--amber)">⚠️ ${conWarnings.length} con advertencias</span>` : '· <span style="color:var(--green)">✅ Sin problemas detectados</span>'}
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Nombre</th><th>Categoría</th><th>EAN</th><th>P.Venta</th><th>P.Costo</th><th>Stock</th><th></th></tr></thead>
+        <thead><tr><th>Nombre</th><th>Prov.</th><th>EAN</th><th>P.Venta</th><th>P.Costo</th><th></th></tr></thead>
         <tbody>
           ${preview.map(r => {
             const warns = validarCSVRow(r);
             const rowStyle = warns.length ? 'background:var(--amber-dim)' : '';
             return `<tr style="${rowStyle}">
-              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nombre}</td>
-              <td>${r.categoria || '—'}</td>
+              <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nombre}</td>
+              <td style="font-size:0.8rem;color:var(--teal)">${r.proveedor || '—'}</td>
               <td style="color:var(--text-dim);font-size:0.8rem">${r.ean || '—'}</td>
               <td style="color:var(--teal)">${r.precio_venta ? '$' + parseFloat(r.precio_venta).toLocaleString('es-AR') : '<span style="color:var(--red)">—</span>'}</td>
               <td style="color:var(--text-muted)">${r.precio_costo ? '$' + parseFloat(r.precio_costo).toLocaleString('es-AR') : '—'}</td>
-              <td>${r.stock_actual || '0'}</td>
               <td style="font-size:0.733rem;color:var(--amber)">${warns.join('<br>')}</td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
     </div>
-    ${csvData.length > 8 ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">…y ${csvData.length - 8} más</div>` : ''}
-    ${conWarnings.length ? `<div style="margin-top:10px;padding:10px 14px;background:var(--amber-dim);border-radius:var(--radius-sm);font-size:0.867rem;color:var(--amber)">
-      ⚠️ Hay ${conWarnings.length} filas con posibles problemas de columnas. Revisá los valores antes de importar.
-    </div>` : ''}`;
+    ${csvData.length > 8 ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">…y ${csvData.length - 8} más</div>` : ''}`;
 
   btn.style.display = '';
   btn.textContent = `✅ Importar ${csvData.length} productos`;
@@ -615,92 +779,45 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
   const btn = document.getElementById('btn-importar-csv');
   const previewEl = document.getElementById('csv-preview');
   btn.disabled = true;
-  btn.textContent = 'Limpiando datos anteriores...';
-
-  // Antes de importar: buscar y borrar registros corruptos del lote anterior
-  // Los EANs del CSV actual son los "reales". Si en la DB hay un producto cuyo
-  // stock_actual coincide con algún precio del CSV → fue un precio mal importado como stock.
-  const preciosDelCSV = new Set(csvData.map(r => Math.round(parseFloat(r.precio_venta))).filter(Boolean));
-  const { data: todosDB } = await supabase.from('productos').select('id, stock_actual, ean');
-  const eansDelCSV = new Set(csvData.map(r => r.ean?.trim()).filter(Boolean));
-
-  const corruptos = (todosDB || []).filter(p =>
-    !eansDelCSV.has(p.ean) &&           // no está en el CSV actual (no lo vamos a actualizar)
-    preciosDelCSV.has(p.stock_actual)   // su stock coincide exactamente con un precio del CSV
-  );
-
-  let limpiadosCnt = 0;
-  if (corruptos.length) {
-    const ids = corruptos.map(p => p.id);
-    await supabase.from('productos').delete().in('id', ids);
-    limpiadosCnt = corruptos.length;
-  }
-
   btn.textContent = 'Importando...';
-  let ok = 0, skip = 0;
+
+  let ok = 0;
   const errores = [];
 
   for (const row of csvData) {
     const ean = row.ean?.trim() || null;
     const sku = row.sku?.trim() || (ean ? `EAN-${ean}` : `SKU-${Date.now()}-${Math.random().toString(36).slice(2,6)}`);
     const producto = {
-      ean,
-      sku,
+      ean, sku,
       nombre: row.nombre,
       categoria: row.categoria || 'General',
+      proveedor: row.proveedor || null,
       precio_venta: parseFloat(row.precio_venta) || 0,
       precio_costo: parseFloat(row.precio_costo) || 0,
       stock_actual: parseInt(row.stock_actual) || 0,
       stock_minimo: parseInt(row.stock_minimo) || 5,
     };
+    
     let error;
     if (ean) {
-      // Con EAN: upsert — actualiza si ya existe, inserta si no
       ({ error } = await supabase.from('productos').upsert(producto, { onConflict: 'ean' }));
     } else {
-      // Sin EAN: insert simple
       ({ error } = await supabase.from('productos').insert(producto));
     }
-    if (error) {
-      errores.push({ nombre: row.nombre, motivo: error.message || error.code });
-    } else ok++;
+    
+    if (error) errores.push({ nombre: row.nombre, motivo: error.message || error.code });
+    else ok++;
   }
 
   btn.disabled = false;
-  showToast(
-    `${ok} importados/actualizados${limpiadosCnt ? ` · ${limpiadosCnt} corruptos eliminados` : ''}${errores.length ? ` · ${errores.length} errores` : ''}`,
-    errores.length > 0 ? 'warning' : 'success', 6000
-  );
+  showToast(`${ok} guardados ${errores.length ? ` · ${errores.length} errores` : ''}`, errores.length > 0 ? 'warning' : 'success', 6000);
 
-  // Log de resultados
   previewEl.innerHTML = `
     <div style="margin-bottom:10px;font-size:0.867rem">
-      <span style="color:var(--green)">✅ ${ok} importados/actualizados</span>
-      ${limpiadosCnt ? `&nbsp;·&nbsp;<span style="color:var(--amber)">🧹 ${limpiadosCnt} registros corruptos eliminados</span>` : ''}
+      <span style="color:var(--green)">✅ ${ok} guardados en base de datos</span>
       ${errores.length ? `&nbsp;·&nbsp;<span style="color:var(--red)">❌ ${errores.length} fallaron</span>` : ''}
-    </div>
-    ${errores.length ? `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Producto</th><th>Error</th></tr></thead>
-        <tbody>
-          ${errores.map(e => `<tr>
-            <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.nombre}</td>
-            <td style="color:var(--red);font-size:0.8rem">${e.motivo}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}`;
+    </div>`;
 
   csvData = [];
   btn.style.display = 'none';
-});
-
-document.getElementById('btn-descargar-template').addEventListener('click', () => {
-  const csv = 'nombre,ean,categoria,precio_venta,precio_costo,stock_actual,stock_minimo\nMulteta aluminio M,7891234567890,Muletas,15000,8000,10,3\nRodillera talle M,,Rodilleras,8500,4500,5,2';
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'template_productos.csv';
-  a.click();
 });
