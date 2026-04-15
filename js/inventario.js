@@ -603,8 +603,15 @@ function aplicarPerfilYMostrar(dataObjects) {
 
 function validarCSVRow(r) {
   const warnings = [];
-  const pv = parseFloat(r.precio_venta);
-  if (!pv || pv <= 0 || isNaN(pv)) warnings.push('Precio Venta inválido');
+  const pv = r.precio_venta;
+  if (pv === '' || pv === null || pv === undefined) {
+    warnings.push('Precio vacío');
+  } else {
+    const pvNum = parseFloat(pv);
+    if (isNaN(pvNum))  warnings.push('Precio no es un número');
+    else if (pvNum < 0) warnings.push('Precio negativo');
+    else if (pvNum === 0) warnings.push('Precio = $0');
+  }
   return warnings;
 }
 
@@ -618,13 +625,53 @@ function renderCSVPreview() {
   }
 
   const conWarnings = csvData.filter(r => validarCSVRow(r).length > 0);
+  const sinProblemas = csvData.filter(r => validarCSVRow(r).length === 0);
+  const omitirCheck = document.getElementById('csv-omitir-sin-precio')?.checked;
   const preview = csvData.slice(0, 8);
+
+  // Detalle de los productos con problema
+  let warningDetalle = '';
+  if (conWarnings.length) {
+    const motivosAgrupados = {};
+    conWarnings.forEach(r => {
+      const motivo = validarCSVRow(r).join(', ');
+      if (!motivosAgrupados[motivo]) motivosAgrupados[motivo] = [];
+      motivosAgrupados[motivo].push(r.nombre);
+    });
+    const detalleRows = Object.entries(motivosAgrupados).map(([motivo, nombres]) => {
+      const lista = nombres.slice(0, 3).map(n =>
+        `<li style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:340px">${n}</li>`
+      ).join('');
+      const resto = nombres.length > 3 ? `<li style="color:var(--text-dim)">…y ${nombres.length - 3} más</li>` : '';
+      return `<div style="margin-bottom:6px">
+        <strong style="color:var(--amber)">${motivo}</strong> (${nombres.length}):
+        <ul style="margin:3px 0 0 16px;font-size:11px;color:var(--text-2)">${lista}${resto}</ul>
+      </div>`;
+    }).join('');
+
+    warningDetalle = `
+      <div style="background:var(--amber-dim);border:1px solid rgba(240,165,0,.3);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;font-size:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <strong style="color:var(--amber)">⚠️ ${conWarnings.length} producto${conWarnings.length>1?'s':''} con problemas de precio</strong>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-2)">
+            <input type="checkbox" id="csv-omitir-sin-precio" ${omitirCheck?'checked':''} onchange="window.toggleOmitirSinPrecio()">
+            Omitir estos al importar
+          </label>
+        </div>
+        ${detalleRows}
+      </div>`;
+  }
+
+  const totalAImportar = omitirCheck ? sinProblemas.length : csvData.length;
 
   el.innerHTML = `
     <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px">
-      ${csvData.length} productos detectados 
-      ${conWarnings.length ? `· <span style="color:var(--amber)">⚠️ ${conWarnings.length} con problemas de precio</span>` : '· <span style="color:var(--green)">✅ Datos listos</span>'}
+      ${csvData.length} productos detectados
+      ${conWarnings.length
+        ? `· <span style="color:var(--amber)">⚠️ ${conWarnings.length} con problemas</span>${omitirCheck ? ` · <span style="color:var(--green)">se importarán ${sinProblemas.length}</span>` : ''}`
+        : '· <span style="color:var(--green)">✅ Datos listos</span>'}
     </div>
+    ${warningDetalle}
     <div class="table-wrap">
       <table>
         <thead><tr><th>Producto</th><th>Prov.</th><th>Precio</th><th>Costo</th><th></th></tr></thead>
@@ -634,9 +681,11 @@ function renderCSVPreview() {
             return `<tr style="${warns.length ? 'background:var(--amber-dim)' : ''}">
               <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nombre}</td>
               <td style="font-size:0.8rem;color:var(--teal)">${r.proveedor || '—'}</td>
-              <td style="color:var(--teal)">${r.precio_venta ? '$' + parseFloat(r.precio_venta).toLocaleString('es-AR') : '—'}</td>
+              <td style="color:${warns.length ? 'var(--amber)' : 'var(--teal)'}">
+                ${r.precio_venta !== '' && r.precio_venta != null ? '$' + parseFloat(r.precio_venta).toLocaleString('es-AR') : '<em style="color:var(--amber)">vacío</em>'}
+              </td>
               <td style="color:var(--text-muted)">${r.precio_costo ? '$' + parseFloat(r.precio_costo).toLocaleString('es-AR') : '—'}</td>
-              <td style="font-size:0.7rem;color:var(--amber)">${warns.join(', ')}</td>
+              <td style="font-size:0.7rem;color:var(--amber)">${warns.join(' · ')}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -645,8 +694,10 @@ function renderCSVPreview() {
     ${csvData.length > 8 ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">…y ${csvData.length - 8} más</div>` : ''}`;
 
   btn.style.display = '';
-  btn.textContent = `✅ Subir ${csvData.length} productos`;
+  btn.textContent = `✅ Subir ${totalAImportar} producto${totalAImportar !== 1 ? 's' : ''}`;
 }
+
+window.toggleOmitirSinPrecio = () => renderCSVPreview();
 
 document.getElementById('btn-importar-csv').addEventListener('click', async () => {
   if (!csvData.length) return;
@@ -654,11 +705,14 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
   const previewEl = document.getElementById('csv-preview');
   btn.disabled = true; btn.textContent = 'Guardando en base de datos...';
 
+  const omitir = document.getElementById('csv-omitir-sin-precio')?.checked;
+  const filas = omitir ? csvData.filter(r => validarCSVRow(r).length === 0) : csvData;
+
   let ok = 0; const errores = [];
-  for (const row of csvData) {
+  for (const row of filas) {
     const ean = row.ean ? String(row.ean).trim() : null;
     const sku = ean ? `EAN-${ean}` : `SKU-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
-    
+
     let error;
     if (ean) {
       ({ error } = await supabase.from('productos').upsert({ ean, sku, ...row }, { onConflict: 'ean' }));
@@ -670,7 +724,7 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
   }
 
   btn.disabled = false;
-  showToast(`${ok} guardados ${errores.length ? ` · Hubo ${errores.length} errores` : ''}`, errores.length > 0 ? 'warning' : 'success', 6000);
+  showToast(`${ok} guardados${errores.length ? ` · ${errores.length} errores` : ''}`, errores.length > 0 ? 'warning' : 'success', 6000);
   previewEl.innerHTML = `<div style="color:var(--green);font-size:0.9rem;font-weight:600">✅ Importación finalizada con éxito.</div>`;
   csvData = []; btn.style.display = 'none';
   cargarProductos();
