@@ -103,8 +103,8 @@ async function cargarSidebarBadges() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    const { data: prods } = await supabase.from('productos').select('stock_actual,stock_minimo').eq('activo', true);
-    const critCount = (prods || []).filter(p => p.stock_actual <= p.stock_minimo).length;
+    const { data: prods } = await supabase.from('productos').select('stock_actual').eq('activo', true);
+    const critCount = (prods || []).filter(p => p.stock_actual === 1).length;
     if (critCount > 0) setBadge('inventario.html', critCount, 'red');
 
     const hoy = new Date().toISOString().split('T')[0];
@@ -235,7 +235,7 @@ function injectSidebarSearch() {
 async function runSearch(q, resultsEl) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return;
-  const { data } = await supabase.from('productos').select('nombre,sku,precio_venta,stock_actual,stock_minimo,categoria')
+  const { data } = await supabase.from('productos').select('nombre,sku,precio_venta,stock_actual,categoria')
     .eq('activo', true).or(`nombre.ilike.%${q}%,sku.ilike.%${q}%`).order('nombre').limit(10);
   if (!data || !data.length) {
     resultsEl.innerHTML = '<div style="padding:12px 16px;font-size:12px;color:var(--text-3)">Sin resultados</div>';
@@ -244,7 +244,7 @@ async function runSearch(q, resultsEl) {
   }
   resultsEl.style.display = 'block';
   resultsEl.innerHTML = data.map(p => {
-    const dot = p.stock_actual <= p.stock_minimo ? 'stock-crit' : p.stock_actual <= p.stock_minimo * 1.5 ? 'stock-warn' : 'stock-ok';
+    const dot = p.stock_actual === 1 ? 'stock-crit' : p.stock_actual <= 5 ? 'stock-warn' : 'stock-ok';
     return `<div class="sidebar-result-item">
       <div style="min-width:0">
         <div style="font-weight:500;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.nombre}</div>

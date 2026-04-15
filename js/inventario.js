@@ -119,14 +119,34 @@ async function cargarProductos() {
 
 function actualizarKPIs() {
   const total = todosProductos.length;
-  const criticos = todosProductos.filter(p => p.stock_actual <= p.stock_minimo).length;
+  const ultimoEnStock = todosProductos.filter(p => p.stock_actual === 1);
   const valorInventario = todosProductos.reduce((s, p) => s + p.stock_actual * Number(p.precio_costo), 0);
   const unidades = todosProductos.reduce((s, p) => s + p.stock_actual, 0);
 
   document.getElementById('kpi-total').textContent = total;
-  document.getElementById('kpi-criticos').textContent = criticos;
   document.getElementById('kpi-valor').textContent = formatMoney(valorInventario);
   document.getElementById('kpi-unidades').textContent = unidades.toLocaleString('es-AR');
+
+  const kpiUltimoEl = document.getElementById('kpi-ultimo-stock');
+  const listaUltimoEl = document.getElementById('kpi-ultimo-lista');
+  const cardUltimoEl = document.getElementById('card-ultimo-stock');
+  if (kpiUltimoEl) kpiUltimoEl.textContent = ultimoEnStock.length;
+  if (cardUltimoEl) cardUltimoEl.style.display = ultimoEnStock.length === 0 ? 'none' : '';
+  if (listaUltimoEl) {
+    if (ultimoEnStock.length === 0) {
+      listaUltimoEl.innerHTML = '';
+    } else {
+      listaUltimoEl.innerHTML = ultimoEnStock
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+        .map(p => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <div>
+            <span style="font-weight:500">${p.nombre}</span>
+            <span style="font-size:11px;color:var(--text-dim);margin-left:6px">${p.categoria}</span>
+          </div>
+          <span class="stock-crit" style="font-weight:700;font-size:13px">1 u.</span>
+        </div>`).join('');
+    }
+  }
 }
 
 function llenarFiltros() {
@@ -170,9 +190,9 @@ function renderTabla() {
 
   if (filtroCategoria) productos = productos.filter(p => p.categoria === filtroCategoria);
   if (filtroProveedor) productos = productos.filter(p => p.proveedor === filtroProveedor);
-  if (filtroStock === 'critico') productos = productos.filter(p => p.stock_actual <= p.stock_minimo);
-  if (filtroStock === 'bajo') productos = productos.filter(p => p.stock_actual > p.stock_minimo && p.stock_actual <= p.stock_minimo * 1.5);
-  if (filtroStock === 'ok') productos = productos.filter(p => p.stock_actual > p.stock_minimo * 1.5);
+  if (filtroStock === 'critico') productos = productos.filter(p => p.stock_actual === 1);
+  if (filtroStock === 'bajo') productos = productos.filter(p => p.stock_actual > 1 && p.stock_actual <= 5);
+  if (filtroStock === 'ok') productos = productos.filter(p => p.stock_actual > 5);
   if (filtroTexto) {
     const q = filtroTexto.toLowerCase();
     productos = productos.filter(p =>
@@ -201,7 +221,7 @@ function renderTabla() {
 
   const tbody = document.getElementById('inventario-tbody');
   if (productos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:32px">Sin productos</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:32px">Sin productos</td></tr>`;
     return;
   }
 
@@ -211,14 +231,14 @@ function renderTabla() {
       : 0;
 
     let stockClass, fillClass;
-    if (p.stock_actual <= p.stock_minimo) {
+    if (p.stock_actual === 1) {
       stockClass = 'stock-crit'; fillClass = 'crit';
-    } else if (p.stock_actual <= p.stock_minimo * 1.5) {
+    } else if (p.stock_actual <= 5) {
       stockClass = 'stock-warn'; fillClass = 'warn';
     } else {
       stockClass = 'stock-ok'; fillClass = 'ok';
     }
-    const maxStock = Math.max(p.stock_actual, p.stock_minimo * 3, 1);
+    const maxStock = Math.max(p.stock_actual, 10, 1);
     const fillPct = Math.min(100, Math.round((p.stock_actual / maxStock) * 100));
 
     return `
@@ -236,7 +256,6 @@ function renderTabla() {
             <div class="stk-bar"><div class="stk-fill ${fillClass}" style="width:${fillPct}%"></div></div>
           </div>
         </td>
-        <td style="font-size:12px;color:var(--text-dim)">${p.stock_minimo}</td>
         <td>${formatMoney(p.precio_venta)}</td>
         <td style="color:var(--text-muted)">${formatMoney(p.precio_costo)}</td>
         <td><span class="badge ${margen >= 40 ? 'badge-green' : margen >= 20 ? 'badge-amber' : 'badge-red'}">${margen}%</span></td>
@@ -275,7 +294,6 @@ window.editarProducto = (id) => {
   document.getElementById('edit-ean').value = p.ean || '';
   document.getElementById('edit-precio-venta').value = p.precio_venta;
   document.getElementById('edit-precio-costo').value = p.precio_costo;
-  document.getElementById('edit-stock-minimo').value = p.stock_minimo;
 };
 
 document.getElementById('btn-cerrar-editar').addEventListener('click', () => document.getElementById('modal-editar').classList.add('hidden'));
@@ -288,8 +306,7 @@ document.getElementById('form-editar').addEventListener('submit', async (e) => {
     proveedor: document.getElementById('edit-proveedor').value.trim() || null,
     ean: document.getElementById('edit-ean').value.trim() || null,
     precio_venta: parseFloat(document.getElementById('edit-precio-venta').value),
-    precio_costo: parseFloat(document.getElementById('edit-precio-costo').value),
-    stock_minimo: parseInt(document.getElementById('edit-stock-minimo').value)
+    precio_costo: parseFloat(document.getElementById('edit-precio-costo').value)
   };
   const btn = e.target.querySelector('[type=submit]');
   btn.disabled = true;
@@ -351,7 +368,7 @@ document.getElementById('form-nuevo-inventario').addEventListener('submit', asyn
     nombre: fd.get('nombre'), categoria: fd.get('categoria'),
     proveedor: fd.get('proveedor').trim() || null,
     precio_venta: parseFloat(fd.get('precio_venta')), precio_costo: parseFloat(fd.get('precio_costo')),
-    stock_actual: parseInt(fd.get('stock_actual')) || 0, stock_minimo: parseInt(fd.get('stock_minimo')) || 5
+    stock_actual: parseInt(fd.get('stock_actual')) || 0
   };
   
   const btn = e.target.querySelector('[type=submit]');
@@ -838,7 +855,6 @@ document.getElementById('btn-guardar-bulk').addEventListener('click', async () =
     proveedor: document.getElementById('bulk-proveedor').value.trim() || null,
     precio_venta, precio_costo: parseFloat(document.getElementById('bulk-precio-costo').value) || 0,
     stock_actual: parseInt(document.getElementById('bulk-stock').value) || 1,
-    stock_minimo: parseInt(document.getElementById('bulk-stock-min').value) || 5,
   });
 
   btn.disabled = false;
