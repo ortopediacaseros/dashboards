@@ -342,6 +342,7 @@ window.abrirEditTicket = async (ventaId) => {
   document.getElementById('edit-medio-pago').value = venta.medio_pago;
   document.getElementById('edit-descuento').value = venta.descuento_pct || 0;
   document.getElementById('edit-observaciones').value = venta.observaciones || '';
+  document.getElementById('edit-fecha').value = venta.fecha ? venta.fecha.split('T')[0] : new Date().toISOString().split('T')[0];
 
   renderEditItems();
   document.getElementById('modal-editar-ticket').classList.remove('hidden');
@@ -466,7 +467,9 @@ document.getElementById('btn-guardar-edit-ticket').addEventListener('click', asy
   }
 
   // 5. Actualizar cabecera
-  const { error } = await supabase.from('ventas').update({ total, medio_pago, observaciones, descuento_pct: desc })
+  const fechaSeleccionada = document.getElementById('edit-fecha').value;
+  const fechaISO = fechaSeleccionada ? new Date(fechaSeleccionada + 'T12:00:00').toISOString() : ticketEditando.fecha;
+  const { error } = await supabase.from('ventas').update({ total, medio_pago, observaciones, descuento_pct: desc, fecha: fechaISO })
     .eq('id', ticketEditando.id);
 
   btn.disabled = false; btn.textContent = '💾 Guardar cambios';

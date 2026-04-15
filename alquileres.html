@@ -31,6 +31,7 @@
       <a href="inventario.html">📦 Inventario</a>
       <a href="stock-carga.html">📋 Carga de stock</a>
       <a href="alquileres.html" class="active">🔄 Alquileres</a>
+      <a href="plantillas.html">🦶 Plantillas</a>
       <a href="facturas.html">🧾 Facturas</a>
       <a href="precios.html">🏷️ Precios</a>
       <a href="reportes.html">📈 Reportes</a>
@@ -85,6 +86,7 @@
           <table>
             <thead>
               <tr>
+                <th style="width:40px;text-align:center">#</th>
                 <th>Cliente</th>
                 <th>Producto</th>
                 <th>Inicio</th>
@@ -96,7 +98,7 @@
               </tr>
             </thead>
             <tbody id="alq-tbody">
-              <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:32px">Cargando…</td></tr>
+              <tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:32px">Cargando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -135,7 +137,9 @@
           <input type="text" class="input" id="alq-producto-search" name="producto_nombre"
             required placeholder="Escribí para buscar…" autocomplete="off">
           <input type="hidden" id="alq-producto-id" name="producto_id">
+          <input type="hidden" id="alq-fuente-stock" name="fuente_stock" value="alquiler">
           <div id="alq-producto-sugerencias" style="display:none;position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);z-index:200;min-width:280px;box-shadow:0 4px 16px rgba(0,0,0,.12)"></div>
+          <div id="alq-fuente-indicator" style="margin-top:6px;font-size:12px;min-height:18px"></div>
         </div>
         <div class="form-row">
           <div class="form-group">

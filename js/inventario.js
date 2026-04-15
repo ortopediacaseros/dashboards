@@ -3,18 +3,96 @@ import { checkAuth } from './auth.js';
 
 let todosProductos = [];
 let filtroCategoria = '';
+let filtroProveedor = ''; 
 let filtroStock = '';
 let filtroTexto = '';
 let sortCol = 'nombre';
 let sortDir = 'asc';
 
+// ══════════════════════════════════════════════════════════
+// MOTOR DE PERSISTENCIA EN NUBE (SUPABASE) - PERFILES DE PROVEEDOR
+// ══════════════════════════════════════════════════════════
+
+const perfilGenerico = {
+  nombreDB: 'Genérico (Formato Ortopedia)',
+  isBase: true,
+  mapeo: {
+    nombre: 'nombre', ean: 'ean', categoria: 'categoria', proveedor: 'proveedor',
+    precio_venta: 'precio_venta', precio_costo: 'precio_costo'
+  }
+};
+
+let configProveedores = { generico: perfilGenerico };
+
+async function cargarPerfilesGuardados() {
+  const { data, error } = await supabase.from('perfiles_proveedores').select('*');
+  
+  if (error) { 
+    console.error('Error cargando perfiles:', error); 
+    showToast('Error cargando perfiles de proveedores', 'error');
+    return; 
+  }
+
+  configProveedores = { generico: perfilGenerico };
+  
+  if (data) {
+    data.forEach(prov => {
+      configProveedores[prov.id] = {
+        nombreDB: prov.nombre,
+        isBase: false,
+        mapeo: prov.mapeo
+      };
+    });
+  }
+
+  const selector = document.getElementById('csv-proveedor-selector');
+  if (selector) {
+    selector.innerHTML = '';
+    for (const [id, config] of Object.entries(configProveedores)) {
+      const opt = document.createElement('option');
+      opt.value = id; opt.textContent = config.nombreDB;
+      selector.appendChild(opt);
+    }
+  }
+
+  const lista = document.getElementById('lista-perfiles-guardados');
+  if (lista) {
+    lista.innerHTML = Object.entries(configProveedores).map(([id, config]) => `
+      <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border:1px solid var(--border); padding:10px; border-radius:var(--radius-sm);">
+        <div>
+          <strong style="font-size:13px; display:block;">${config.nombreDB}</strong>
+          <span style="font-size:11px; color:var(--text-dim)">Mapea ${Object.values(config.mapeo).filter(Boolean).length} columnas</span>
+        </div>
+        ${config.isBase 
+          ? `<span style="font-size:11px; color:var(--text-muted); background:var(--bg-body); padding:4px 8px; border-radius:4px;">Por defecto</span>` 
+          : `<button class="btn btn-secondary" style="padding:4px 8px; font-size:12px; color:var(--red);" onclick="window.eliminarPerfilProveedor('${id}')">🗑️ Borrar</button>`
+        }
+      </div>
+    `).join('');
+  }
+}
+
+window.eliminarPerfilProveedor = async (id) => {
+  if(confirm('¿Estás seguro de que querés borrar este perfil de la base de datos?')) {
+    const { error } = await supabase.from('perfiles_proveedores').delete().eq('id', id);
+    if (error) { showToast('Error al borrar de la nube: ' + error.message, 'error'); return; }
+    
+    cargarPerfilesGuardados();
+    showToast('Perfil eliminado de la base de datos', 'success');
+  }
+};
+
+// ══════════════════════════════════════════════════════════
+// INICIALIZACIÓN Y CARGA DE PRODUCTOS
+// ══════════════════════════════════════════════════════════
+
 async function init() {
   const session = await checkAuth();
   if (!session) return;
 
+  await cargarPerfilesGuardados();
   await cargarProductos();
 
-  // Realtime
   supabase.channel('inv-cambios')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, () => {
       cargarProductos();
@@ -35,6 +113,10 @@ async function cargarProductos() {
   renderTabla();
 }
 
+// ══════════════════════════════════════════════════════════
+// KPIs Y TABLA PRINCIPAL
+// ══════════════════════════════════════════════════════════
+
 function actualizarKPIs() {
   const total = todosProductos.length;
   const criticos = todosProductos.filter(p => p.stock_actual <= p.stock_minimo).length;
@@ -48,16 +130,26 @@ function actualizarKPIs() {
 }
 
 function llenarFiltros() {
-  const cats = [...new Set(todosProductos.map(p => p.categoria))].sort();
-  const sel = document.getElementById('filtro-categoria');
-  const current = sel.value;
-  sel.innerHTML = '<option value="">Todas las categorías</option>';
+  const cats = [...new Set(todosProductos.map(p => p.categoria).filter(Boolean))].sort();
+  const selCat = document.getElementById('filtro-categoria');
+  const currentCat = selCat.value;
+  selCat.innerHTML = '<option value="">Todas las categorías</option>';
   cats.forEach(c => {
     const opt = document.createElement('option');
-    opt.value = c;
-    opt.textContent = c;
-    if (c === current) opt.selected = true;
-    sel.appendChild(opt);
+    opt.value = c; opt.textContent = c;
+    if (c === currentCat) opt.selected = true;
+    selCat.appendChild(opt);
+  });
+
+  const provs = [...new Set(todosProductos.map(p => p.proveedor).filter(Boolean))].sort();
+  const selProv = document.getElementById('filtro-proveedor');
+  const currentProv = selProv.value;
+  selProv.innerHTML = '<option value="">Todos los proveedores</option>';
+  provs.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    if (p === currentProv) opt.selected = true;
+    selProv.appendChild(opt);
   });
 }
 
@@ -77,6 +169,7 @@ function renderTabla() {
   let productos = todosProductos;
 
   if (filtroCategoria) productos = productos.filter(p => p.categoria === filtroCategoria);
+  if (filtroProveedor) productos = productos.filter(p => p.proveedor === filtroProveedor);
   if (filtroStock === 'critico') productos = productos.filter(p => p.stock_actual <= p.stock_minimo);
   if (filtroStock === 'bajo') productos = productos.filter(p => p.stock_actual > p.stock_minimo && p.stock_actual <= p.stock_minimo * 1.5);
   if (filtroStock === 'ok') productos = productos.filter(p => p.stock_actual > p.stock_minimo * 1.5);
@@ -86,21 +179,20 @@ function renderTabla() {
       p.nombre.toLowerCase().includes(q) ||
       p.sku?.toLowerCase().includes(q) ||
       p.ean?.includes(q) ||
-      p.categoria.toLowerCase().includes(q)
+      p.categoria?.toLowerCase().includes(q) ||
+      p.proveedor?.toLowerCase().includes(q)
     );
   }
 
-  // Ordenar
   productos = [...productos].sort((a, b) => {
     let va = a[sortCol] ?? '', vb = b[sortCol] ?? '';
     const res = typeof va === 'string' ? va.localeCompare(vb, 'es') : va - vb;
     return sortDir === 'asc' ? res : -res;
   });
 
-  // Actualizar headers con indicador de orden
   const thMap = {
     nombre: 'th-nombre', stock_actual: 'th-stock', precio_venta: 'th-pventa',
-    precio_costo: 'th-pcosto', categoria: 'th-cat'
+    precio_costo: 'th-pcosto', proveedor: 'th-proveedor'
   };
   Object.entries(thMap).forEach(([col, id]) => {
     const el = document.getElementById(id);
@@ -109,7 +201,7 @@ function renderTabla() {
 
   const tbody = document.getElementById('inventario-tbody');
   if (productos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:32px">Sin productos</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:32px">Sin productos</td></tr>`;
     return;
   }
 
@@ -137,6 +229,7 @@ function renderTabla() {
         </td>
         <td style="font-size:12px;color:var(--text-muted)">${p.sku}</td>
         <td style="font-size:12px;color:var(--text-dim)">${p.ean || '—'}</td>
+        <td style="font-size:12px;color:var(--teal);font-weight:500">${p.proveedor || '—'}</td>
         <td>
           <div class="stk">
             <span class="${stockClass}" style="min-width:24px;text-align:right">${p.stock_actual}</span>
@@ -149,84 +242,65 @@ function renderTabla() {
         <td><span class="badge ${margen >= 40 ? 'badge-green' : margen >= 20 ? 'badge-amber' : 'badge-red'}">${margen}%</span></td>
         <td>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px"
-              onclick="window.editarProducto('${p.id}')">✏️</button>
-            <button class="btn btn-amber" style="padding:5px 10px;font-size:12px"
-              onclick="window.ajustarStock('${p.id}','${p.nombre}',${p.stock_actual})">±</button>
+            <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="window.editarProducto('${p.id}')">✏️</button>
+            <button class="btn btn-amber" style="padding:5px 10px;font-size:12px" onclick="window.ajustarStock('${p.id}','${p.nombre}',${p.stock_actual})">±</button>
           </div>
         </td>
       </tr>`;
   }).join('');
 }
 
-// Filtros
-document.getElementById('filtro-categoria').addEventListener('change', e => {
-  filtroCategoria = e.target.value;
-  renderTabla();
-});
-
-document.getElementById('filtro-stock').addEventListener('change', e => {
-  filtroStock = e.target.value;
-  renderTabla();
-});
+document.getElementById('filtro-categoria').addEventListener('change', e => { filtroCategoria = e.target.value; renderTabla(); });
+document.getElementById('filtro-proveedor').addEventListener('change', e => { filtroProveedor = e.target.value; renderTabla(); });
+document.getElementById('filtro-stock').addEventListener('change', e => { filtroStock = e.target.value; renderTabla(); });
 
 let searchTimer;
 document.getElementById('busqueda').addEventListener('input', e => {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    filtroTexto = e.target.value.trim();
-    renderTabla();
-  }, 200);
+  searchTimer = setTimeout(() => { filtroTexto = e.target.value.trim(); renderTabla(); }, 200);
 });
 
-// Modal editar
+// ══════════════════════════════════════════════════════════
+// MODALES MANUALES (Editar, Ajustar, Nuevo)
+// ══════════════════════════════════════════════════════════
+
 window.editarProducto = (id) => {
   const p = todosProductos.find(x => x.id === id);
   if (!p) return;
-  const modal = document.getElementById('modal-editar');
-  modal.classList.remove('hidden');
+  document.getElementById('modal-editar').classList.remove('hidden');
   document.getElementById('edit-id').value = p.id;
   document.getElementById('edit-nombre').value = p.nombre;
   document.getElementById('edit-categoria').value = p.categoria;
+  document.getElementById('edit-proveedor').value = p.proveedor || '';
   document.getElementById('edit-ean').value = p.ean || '';
   document.getElementById('edit-precio-venta').value = p.precio_venta;
   document.getElementById('edit-precio-costo').value = p.precio_costo;
   document.getElementById('edit-stock-minimo').value = p.stock_minimo;
 };
 
-document.getElementById('btn-cerrar-editar').addEventListener('click', () => {
-  document.getElementById('modal-editar').classList.add('hidden');
-});
-
-document.getElementById('modal-editar').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal-editar'))
-    document.getElementById('modal-editar').classList.add('hidden');
-});
-
+document.getElementById('btn-cerrar-editar').addEventListener('click', () => document.getElementById('modal-editar').classList.add('hidden'));
 document.getElementById('form-editar').addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = document.getElementById('edit-id').value;
   const updates = {
     nombre: document.getElementById('edit-nombre').value,
     categoria: document.getElementById('edit-categoria').value,
+    proveedor: document.getElementById('edit-proveedor').value.trim() || null,
     ean: document.getElementById('edit-ean').value.trim() || null,
     precio_venta: parseFloat(document.getElementById('edit-precio-venta').value),
     precio_costo: parseFloat(document.getElementById('edit-precio-costo').value),
     stock_minimo: parseInt(document.getElementById('edit-stock-minimo').value)
   };
-
   const btn = e.target.querySelector('[type=submit]');
   btn.disabled = true;
   const { error } = await supabase.from('productos').update(updates).eq('id', id);
   btn.disabled = false;
-
-  if (error) { showToast('Error al guardar: ' + error.message, 'error'); return; }
+  if (error) { showToast('Error al guardar', 'error'); return; }
   showToast('Producto actualizado', 'success');
   document.getElementById('modal-editar').classList.add('hidden');
   cargarProductos();
 });
 
-// Modal ajustar stock
 window.ajustarStock = (id, nombre, stockActual) => {
   document.getElementById('ajuste-id').value = id;
   document.getElementById('ajuste-nombre').textContent = nombre;
@@ -237,118 +311,81 @@ window.ajustarStock = (id, nombre, stockActual) => {
 };
 
 document.getElementById('ajuste-cantidad').addEventListener('input', e => {
-  const id = document.getElementById('ajuste-id').value;
-  const p = todosProductos.find(x => x.id === id);
+  const p = todosProductos.find(x => x.id === document.getElementById('ajuste-id').value);
   if (!p) return;
-  const delta = parseInt(e.target.value) || 0;
-  const nuevo = p.stock_actual + delta;
+  const nuevo = p.stock_actual + (parseInt(e.target.value) || 0);
   document.getElementById('preview-nuevo').textContent = nuevo;
   document.getElementById('preview-nuevo').style.color = nuevo < 0 ? 'var(--red)' : 'var(--text)';
 });
 
-document.getElementById('btn-cerrar-ajuste').addEventListener('click', () => {
-  document.getElementById('modal-ajuste').classList.add('hidden');
-});
-
-document.getElementById('modal-ajuste').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal-ajuste'))
-    document.getElementById('modal-ajuste').classList.add('hidden');
-});
-
+document.getElementById('btn-cerrar-ajuste').addEventListener('click', () => document.getElementById('modal-ajuste').classList.add('hidden'));
 document.getElementById('form-ajuste').addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = document.getElementById('ajuste-id').value;
   const delta = parseInt(document.getElementById('ajuste-cantidad').value) || 0;
   const p = todosProductos.find(x => x.id === id);
   const nuevo = (p?.stock_actual || 0) + delta;
-
   if (nuevo < 0) { showToast('El stock no puede quedar negativo', 'warning'); return; }
-
+  
   const btn = e.target.querySelector('[type=submit]');
   btn.disabled = true;
   const { error } = await supabase.from('productos').update({ stock_actual: nuevo }).eq('id', id);
   btn.disabled = false;
-
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
   showToast('Stock actualizado', 'success');
   document.getElementById('modal-ajuste').classList.add('hidden');
   cargarProductos();
 });
 
-// Modal nuevo producto
 document.getElementById('btn-agregar').addEventListener('click', () => {
   document.getElementById('form-nuevo-inventario').reset();
   document.getElementById('modal-nuevo').classList.remove('hidden');
 });
-
-document.getElementById('btn-cerrar-nuevo').addEventListener('click', () => {
-  document.getElementById('modal-nuevo').classList.add('hidden');
-});
-
-document.getElementById('modal-nuevo').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal-nuevo'))
-    document.getElementById('modal-nuevo').classList.add('hidden');
-});
-
+document.getElementById('btn-cerrar-nuevo').addEventListener('click', () => document.getElementById('modal-nuevo').classList.add('hidden'));
 document.getElementById('form-nuevo-inventario').addEventListener('submit', async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
   const ean = fd.get('ean').trim() || null;
-  const sku = ean ? `EAN-${ean}` : `SKU-${Date.now()}`;
-
   const producto = {
-    ean,
-    sku,
-    nombre: fd.get('nombre'),
-    categoria: fd.get('categoria'),
-    precio_venta: parseFloat(fd.get('precio_venta')),
-    precio_costo: parseFloat(fd.get('precio_costo')),
-    stock_actual: parseInt(fd.get('stock_actual')) || 0,
-    stock_minimo: parseInt(fd.get('stock_minimo')) || 5
+    ean, sku: ean ? `EAN-${ean}` : `SKU-${Date.now()}`,
+    nombre: fd.get('nombre'), categoria: fd.get('categoria'),
+    proveedor: fd.get('proveedor').trim() || null,
+    precio_venta: parseFloat(fd.get('precio_venta')), precio_costo: parseFloat(fd.get('precio_costo')),
+    stock_actual: parseInt(fd.get('stock_actual')) || 0, stock_minimo: parseInt(fd.get('stock_minimo')) || 5
   };
-
+  
   const btn = e.target.querySelector('[type=submit]');
   btn.disabled = true;
   const { error } = await supabase.from('productos').insert(producto);
   btn.disabled = false;
-
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
   showToast('Producto agregado', 'success');
   document.getElementById('modal-nuevo').classList.add('hidden');
   cargarProductos();
 });
 
-init();
-
 // ══════════════════════════════════════════════════════════
-// CARGA MASIVA
+// CARGA MASIVA AVANZADA (ESCANER + EXCEL MULTI-HOJA)
 // ══════════════════════════════════════════════════════════
 
 let bulkScanner = null;
 let bulkCount = 0;
 let csvData = [];
+let currentCsvMode = 'upload'; 
+let headersExtraidos = []; 
 
-// Abrir / cerrar modal
 document.getElementById('btn-carga-masiva').addEventListener('click', () => {
   bulkCount = 0;
-  actualizarContador();
+  cargarPerfilesGuardados(); 
   document.getElementById('modal-carga-masiva').classList.remove('hidden');
 });
 
-document.getElementById('btn-cerrar-masiva').addEventListener('click', cerrarMasiva);
-document.getElementById('modal-carga-masiva').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal-carga-masiva')) cerrarMasiva();
+document.getElementById('btn-cerrar-masiva').addEventListener('click', async () => {
+  if (bulkScanner) { try { await bulkScanner.stop(); bulkScanner.clear(); } catch(e){} }
+  document.getElementById('modal-carga-masiva').classList.add('hidden');
+  if (bulkCount > 0) cargarProductos();
 });
 
-async function cerrarMasiva() {
-  await detenerScanBulk();
-  document.getElementById('modal-carga-masiva').classList.add('hidden');
-  document.getElementById('bulk-scan-form').style.display = 'none';
-  document.getElementById('btn-iniciar-scan-bulk').style.display = '';
-  if (bulkCount > 0) cargarProductos();
-}
-
-// Tabs
 document.querySelectorAll('.bulk-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.bulk-tab').forEach(t => t.classList.remove('active'));
@@ -358,13 +395,288 @@ document.querySelectorAll('.bulk-tab').forEach(tab => {
   });
 });
 
-// ── Escaneo rápido ───────────────────────────────────────
+document.querySelectorAll('.csv-mode-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    document.querySelectorAll('.csv-mode-btn').forEach(b => {
+      b.classList.remove('active'); b.style.background = 'transparent'; b.style.color = 'var(--text-main)';
+    });
+    const target = e.target;
+    target.classList.add('active'); target.style.background = 'var(--teal-dim)'; target.style.color = 'var(--teal)';
+    currentCsvMode = target.dataset.mode;
+    
+    document.getElementById('csv-mode-upload').style.display = currentCsvMode === 'upload' ? 'block' : 'none';
+    document.getElementById('csv-mode-new-prov').style.display = currentCsvMode === 'new-prov' ? 'block' : 'none';
+    document.getElementById('csv-mode-manage-prov').style.display = currentCsvMode === 'manage-prov' ? 'block' : 'none';
+    
+    document.getElementById('csv-preview').innerHTML = '';
+    document.getElementById('btn-importar-csv').style.display = 'none';
+  });
+});
 
-function actualizarContador() {
-  document.getElementById('scan-counter').innerHTML =
-    `${bulkCount} <span>producto${bulkCount !== 1 ? 's' : ''} cargado${bulkCount !== 1 ? 's' : ''} en esta sesión</span>`;
+// ── Dropzones Excel ──
+const csvInput = document.getElementById('csv-input');
+const drops = [document.getElementById('csv-drop-zone-upload'), document.getElementById('csv-drop-zone-template')];
+
+drops.forEach(drop => {
+  drop.addEventListener('click', () => csvInput.click());
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault(); drop.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) procesarArchivoExcelOCSV(e.dataTransfer.files[0]);
+  });
+});
+
+csvInput.addEventListener('change', () => { if (csvInput.files[0]) procesarArchivoExcelOCSV(csvInput.files[0]); });
+
+function procesarArchivoExcelOCSV(file) {
+  if (!window.XLSX) {
+    showToast('Aguardá un segundo, cargando librería Excel...', 'warning'); return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      
+      if (data.byteLength === 0) {
+        showToast('El archivo pesa 0 bytes. Asegurate de cerrarlo en Excel antes de subirlo.', 'error');
+        return;
+      }
+
+      const workbook = XLSX.read(data, { type: 'array' });
+      
+      let bestRows = [];
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
+        if (rows.length > bestRows.length) {
+          bestRows = rows;
+        }
+      }
+
+      if (bestRows.length < 2) { 
+        showToast('El archivo no tiene filas suficientes o está vacío.', 'warning'); 
+        return; 
+      }
+
+      const keywords = ['código', 'codigo', 'descripción', 'descripcion', 'producto', 'artículo', 'articulo', 'precio', 'ean', 'barra', 'rubro', 'categoría', 'talle', 'detalle', 'unitario'];
+      let headerIndex = 0; let maxScore = 0;
+
+      for (let i = 0; i < Math.min(bestRows.length, 100); i++) {
+        const row = bestRows[i];
+        if (!row || !row.length) continue;
+        let score = 0;
+        row.forEach(cell => {
+          const str = String(cell || '').toLowerCase().trim();
+          if (keywords.some(kw => str.includes(kw))) score++;
+        });
+        if (score > maxScore) { maxScore = score; headerIndex = i; }
+      }
+
+      const rawHeaders = bestRows[headerIndex];
+      const headers = [];
+      const headerCounts = {}; 
+
+      for (let i = 0; i < rawHeaders.length; i++) {
+        let h = String(rawHeaders[i] || '').toLowerCase().trim();
+        if (!h) h = `columna_${i + 1}`; 
+        if (headerCounts[h]) { headerCounts[h]++; h = `${h}_${headerCounts[h]}`; } 
+        else { headerCounts[h] = 1; }
+        headers.push(h);
+      }
+
+      const validDataRows = bestRows.slice(headerIndex + 1).filter(r => r.length > 0 && r.some(c => c !== '' && c !== undefined && c !== null));
+
+      const dataObjects = validDataRows.map(rowArray => {
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = rowArray[i] !== undefined ? rowArray[i] : ''; });
+        return obj;
+      });
+
+      if (currentCsvMode === 'upload') {
+        aplicarPerfilYMostrar(dataObjects);
+      } else if (currentCsvMode === 'new-prov') {
+        headersExtraidos = [...new Set(headers.filter(h => h !== ''))];
+        armarUIAsignacionDeColumnas(headersExtraidos);
+      }
+
+    } catch (err) {
+      showToast('Error leyendo el archivo Excel.', 'error'); console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  csvInput.value = ''; 
 }
 
+function armarUIAsignacionDeColumnas(headersFile) {
+  const camposRequeridos = {
+    'nombre': 'Nombre / Descripción *',
+    'ean': 'EAN / Cód. Barras (Opcional)',
+    'categoria': 'Categoría / Rubro',
+    'precio_venta': 'Precio de Venta *',
+    'precio_costo': 'Precio de Costo'
+  };
+
+  let html = '';
+  for (const [keyDb, labelUI] of Object.entries(camposRequeridos)) {
+    let options = `<option value="">-- Ignorar / No importar --</option>`;
+    let yaSeleccionado = false;
+
+    headersFile.forEach(h => {
+      let selected = '';
+      const terminos = keyDb === 'nombre' ? ['descrip', 'articul', 'nombre', 'detalle'] : [keyDb.split('_')[0]]; 
+      if (!yaSeleccionado && terminos.some(t => h.includes(t))) { selected = 'selected'; yaSeleccionado = true; }
+      options += `<option value="${h}" ${selected}>Columna Excel: ${h}</option>`;
+    });
+
+    html += `
+      <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+        <span style="font-weight:500; width:45%;">${labelUI}</span>
+        <select class="select map-select" data-db="${keyDb}" style="width:50%; padding:4px;">${options}</select>
+      </div>`;
+  }
+
+  document.getElementById('mapping-fields').innerHTML = html;
+  document.getElementById('new-prov-mapping').style.display = 'block';
+  showToast('Excel analizado. Revisá la asignación de columnas.', 'success');
+}
+
+document.getElementById('btn-save-provider').addEventListener('click', async () => {
+  const nombreProv = document.getElementById('new-prov-name').value.trim();
+  if (!nombreProv) { showToast('Falta el nombre del proveedor', 'warning'); return; }
+
+  const idProv = nombreProv.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const mapeoActual = {};
+  document.querySelectorAll('.map-select').forEach(sel => { 
+    if(sel.value) mapeoActual[sel.dataset.db] = sel.value; 
+  });
+
+  const btn = document.getElementById('btn-save-provider');
+  btn.disabled = true;
+  btn.textContent = 'Guardando en la nube...';
+
+  const { error } = await supabase.from('perfiles_proveedores').upsert({
+    id: idProv,
+    nombre: nombreProv,
+    mapeo: mapeoActual
+  });
+
+  btn.disabled = false;
+  btn.textContent = '💾 Guardar Perfil Permanente';
+
+  if (error) { showToast('Error al guardar en Supabase: ' + error.message, 'error'); return; }
+
+  showToast(`Perfil de ${nombreProv} guardado en la nube.`, 'success');
+  
+  await cargarPerfilesGuardados(); 
+  
+  document.querySelector('.csv-mode-btn[data-mode="upload"]').click();
+  document.getElementById('csv-proveedor-selector').value = idProv;
+  document.getElementById('new-prov-name').value = ''; 
+});
+
+function aplicarPerfilYMostrar(dataObjects) {
+  const proveedorKey = document.getElementById('csv-proveedor-selector').value;
+  const config = configProveedores[proveedorKey];
+
+  if (!config) { showToast('Perfil de proveedor no encontrado', 'error'); return; }
+  const m = config.mapeo;
+
+  csvData = dataObjects.map(rowObj => {
+    if(m.nombre && !rowObj[m.nombre]) return null;
+
+    return {
+      nombre: m.nombre && rowObj[m.nombre] ? String(rowObj[m.nombre]) : 'Sin nombre',
+      ean: m.ean && rowObj[m.ean] ? String(rowObj[m.ean]) : null,
+      categoria: m.categoria && rowObj[m.categoria] ? String(rowObj[m.categoria]) : 'General',
+      proveedor: config.nombreDB,
+      precio_venta: m.precio_venta && rowObj[m.precio_venta] ? parseFloat(rowObj[m.precio_venta]) : 0,
+      precio_costo: m.precio_costo && rowObj[m.precio_costo] ? parseFloat(rowObj[m.precio_costo]) : 0,
+      stock_actual: 0,
+      stock_minimo: 5
+    };
+  }).filter(r => r !== null && r.nombre !== 'Sin nombre');
+
+  renderCSVPreview();
+}
+
+function validarCSVRow(r) {
+  const warnings = [];
+  const pv = parseFloat(r.precio_venta);
+  if (!pv || pv <= 0 || isNaN(pv)) warnings.push('Precio Venta inválido');
+  return warnings;
+}
+
+function renderCSVPreview() {
+  const el = document.getElementById('csv-preview');
+  const btn = document.getElementById('btn-importar-csv');
+
+  if (csvData.length === 0) {
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:0.867rem">No se encontraron productos válidos o las columnas del archivo no coinciden con el perfil elegido.</p>';
+    btn.style.display = 'none'; return;
+  }
+
+  const conWarnings = csvData.filter(r => validarCSVRow(r).length > 0);
+  const preview = csvData.slice(0, 8);
+
+  el.innerHTML = `
+    <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px">
+      ${csvData.length} productos detectados 
+      ${conWarnings.length ? `· <span style="color:var(--amber)">⚠️ ${conWarnings.length} con problemas de precio</span>` : '· <span style="color:var(--green)">✅ Datos listos</span>'}
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Producto</th><th>Prov.</th><th>Precio</th><th>Costo</th><th></th></tr></thead>
+        <tbody>
+          ${preview.map(r => {
+            const warns = validarCSVRow(r);
+            return `<tr style="${warns.length ? 'background:var(--amber-dim)' : ''}">
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nombre}</td>
+              <td style="font-size:0.8rem;color:var(--teal)">${r.proveedor || '—'}</td>
+              <td style="color:var(--teal)">${r.precio_venta ? '$' + parseFloat(r.precio_venta).toLocaleString('es-AR') : '—'}</td>
+              <td style="color:var(--text-muted)">${r.precio_costo ? '$' + parseFloat(r.precio_costo).toLocaleString('es-AR') : '—'}</td>
+              <td style="font-size:0.7rem;color:var(--amber)">${warns.join(', ')}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${csvData.length > 8 ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">…y ${csvData.length - 8} más</div>` : ''}`;
+
+  btn.style.display = '';
+  btn.textContent = `✅ Subir ${csvData.length} productos`;
+}
+
+document.getElementById('btn-importar-csv').addEventListener('click', async () => {
+  if (!csvData.length) return;
+  const btn = document.getElementById('btn-importar-csv');
+  const previewEl = document.getElementById('csv-preview');
+  btn.disabled = true; btn.textContent = 'Guardando en base de datos...';
+
+  let ok = 0; const errores = [];
+  for (const row of csvData) {
+    const ean = row.ean ? String(row.ean).trim() : null;
+    const sku = ean ? `EAN-${ean}` : `SKU-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    
+    let error;
+    if (ean) {
+      ({ error } = await supabase.from('productos').upsert({ ean, sku, ...row }, { onConflict: 'ean' }));
+    } else {
+      ({ error } = await supabase.from('productos').insert({ sku, ...row }));
+    }
+    if (error) errores.push({ nombre: row.nombre, motivo: error.message });
+    else ok++;
+  }
+
+  btn.disabled = false;
+  showToast(`${ok} guardados ${errores.length ? ` · Hubo ${errores.length} errores` : ''}`, errores.length > 0 ? 'warning' : 'success', 6000);
+  previewEl.innerHTML = `<div style="color:var(--green);font-size:0.9rem;font-weight:600">✅ Importación finalizada con éxito.</div>`;
+  csvData = []; btn.style.display = 'none';
+  cargarProductos();
+});
+
+// ── Lógica del Escáner Rápido ──
 document.getElementById('btn-iniciar-scan-bulk').addEventListener('click', async () => {
   const container = document.getElementById('scan-bulk-container');
   container.style.display = '';
@@ -378,18 +690,13 @@ document.getElementById('btn-iniciar-scan-bulk').addEventListener('click', async
   ];
   bulkScanner = new Html5Qrcode('scan-bulk-container', { formatsToSupport: formats, verbose: false });
   try {
-    await bulkScanner.start(
-      { facingMode: 'environment' },
-      { fps: 15, qrbox: { width: 280, height: 100 } },
-      onBulkEAN,
-      () => {}
-    );
+    await bulkScanner.start({ facingMode: 'environment' }, { fps: 15, qrbox: { width: 280, height: 100 } }, onBulkEAN, () => {});
   } catch {
     try {
       const devices = await Html5Qrcode.getCameras();
       if (devices?.length) await bulkScanner.start(devices[0].id, { fps: 15, qrbox: { width: 280, height: 100 } }, onBulkEAN, () => {});
     } catch (err2) {
-      showToast('Error al acceder a la cámara: ' + (err2?.message || String(err2)), 'error');
+      showToast('Error de cámara: ' + (err2?.message || String(err2)), 'error');
       container.style.display = 'none';
       document.getElementById('btn-iniciar-scan-bulk').style.display = '';
     }
@@ -397,41 +704,27 @@ document.getElementById('btn-iniciar-scan-bulk').addEventListener('click', async
 });
 
 async function detenerScanBulk() {
-  if (bulkScanner) {
-    try { await bulkScanner.stop(); bulkScanner.clear(); } catch (e) {}
-    bulkScanner = null;
-  }
+  if (bulkScanner) { try { await bulkScanner.stop(); bulkScanner.clear(); } catch(e){} bulkScanner = null; }
   document.getElementById('scan-bulk-container').style.display = 'none';
 }
 
 async function onBulkEAN(ean) {
   await detenerScanBulk();
-
-  // Verificar si ya existe
   const { data } = await supabase.from('productos').select('id,nombre').eq('ean', ean).maybeSingle();
   if (data) {
     showToast(`Ya existe: ${data.nombre}`, 'warning', 2500);
-    reiniciarScanBulk();
-    return;
+    reiniciarScanBulk(); return;
   }
 
-  // Mostrar form
   document.getElementById('bulk-ean-detectado').textContent = ean;
-  document.getElementById('bulk-nombre').value = '';
-  document.getElementById('bulk-categoria').value = '';
-  document.getElementById('bulk-precio-venta').value = '';
-  document.getElementById('bulk-precio-costo').value = '';
-  document.getElementById('bulk-stock').value = '1';
+  document.getElementById('bulk-nombre').value = ''; document.getElementById('bulk-categoria').value = '';
+  document.getElementById('bulk-proveedor').value = ''; document.getElementById('bulk-precio-venta').value = '';
+  document.getElementById('bulk-precio-costo').value = ''; document.getElementById('bulk-stock').value = '1';
   document.getElementById('bulk-stock-min').value = '5';
   document.getElementById('bulk-scan-form').style.display = '';
 
-  // Sugerencias de categorías existentes
-  const cats = [...new Set(todosProductos.map(p => p.categoria))].sort().slice(0, 8);
-  document.getElementById('bulk-cat-sugerencias').innerHTML = cats.map(c =>
-    `<button type="button" class="btn btn-secondary" style="padding:3px 10px;font-size:11px"
-      onclick="document.getElementById('bulk-categoria').value='${c}'">${c}</button>`
-  ).join('');
-
+  const cats = [...new Set(todosProductos.map(p => p.categoria).filter(Boolean))].sort().slice(0, 8);
+  document.getElementById('bulk-cat-sugerencias').innerHTML = cats.map(c => `<button type="button" class="btn btn-secondary" style="padding:3px 10px;font-size:11px" onclick="document.getElementById('bulk-categoria').value='${c}'">${c}</button>`).join('');
   setTimeout(() => document.getElementById('bulk-nombre').focus(), 100);
 }
 
@@ -441,266 +734,38 @@ document.getElementById('btn-guardar-bulk').addEventListener('click', async () =
   const precio_venta = parseFloat(document.getElementById('bulk-precio-venta').value);
   const ean = document.getElementById('bulk-ean-detectado').textContent;
 
-  if (!nombre || !categoria || !precio_venta) {
-    showToast('Nombre, categoría y precio venta son obligatorios', 'warning');
-    return;
-  }
+  if (!nombre || !categoria || !precio_venta) { showToast('Nombre, categoría y precio venta son obligatorios', 'warning'); return; }
 
-  const btn = document.getElementById('btn-guardar-bulk');
-  btn.disabled = true;
+  const btn = document.getElementById('btn-guardar-bulk'); btn.disabled = true;
 
   const { error } = await supabase.from('productos').insert({
-    ean,
-    sku: `EAN-${ean}`,
-    nombre,
-    categoria,
-    precio_venta,
-    precio_costo: parseFloat(document.getElementById('bulk-precio-costo').value) || 0,
+    ean, sku: `EAN-${ean}`, nombre, categoria,
+    proveedor: document.getElementById('bulk-proveedor').value.trim() || null,
+    precio_venta, precio_costo: parseFloat(document.getElementById('bulk-precio-costo').value) || 0,
     stock_actual: parseInt(document.getElementById('bulk-stock').value) || 1,
     stock_minimo: parseInt(document.getElementById('bulk-stock-min').value) || 5,
   });
 
   btn.disabled = false;
-
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
 
-  bulkCount++;
-  actualizarContador();
-  showToast(`${nombre} guardado`, 'success', 1500);
-  reiniciarScanBulk();
+  bulkCount++; document.getElementById('scan-counter').innerHTML = `${bulkCount} <span>cargados hoy</span>`;
+  showToast(`${nombre} guardado`, 'success', 1500); reiniciarScanBulk();
 });
 
 document.getElementById('btn-skip-bulk').addEventListener('click', reiniciarScanBulk);
 
 async function reiniciarScanBulk() {
   document.getElementById('bulk-scan-form').style.display = 'none';
-  document.getElementById('btn-iniciar-scan-bulk').style.display = '';
-  document.getElementById('scan-bulk-container').style.display = 'none';
-
-  // Reiniciar escáner automáticamente
-  const container = document.getElementById('scan-bulk-container');
-  container.style.display = '';
+  document.getElementById('scan-bulk-container').style.display = '';
   document.getElementById('btn-iniciar-scan-bulk').style.display = 'none';
   bulkScanner = new Html5Qrcode('scan-bulk-container');
-  try {
-    await bulkScanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 250, height: 160 } },
-      onBulkEAN,
-      () => {}
-    );
+  try { await bulkScanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 250, height: 160 } }, onBulkEAN, () => {});
   } catch (err) {
-    container.style.display = 'none';
+    document.getElementById('scan-bulk-container').style.display = 'none';
     document.getElementById('btn-iniciar-scan-bulk').style.display = '';
   }
 }
 
-// ── Importar CSV ─────────────────────────────────────────
-
-const csvDrop = document.getElementById('csv-drop-zone');
-const csvInput = document.getElementById('csv-input');
-
-csvDrop.addEventListener('click', () => csvInput.click());
-csvDrop.addEventListener('dragover', e => { e.preventDefault(); csvDrop.classList.add('dragover'); });
-csvDrop.addEventListener('dragleave', () => csvDrop.classList.remove('dragover'));
-csvDrop.addEventListener('drop', e => {
-  e.preventDefault(); csvDrop.classList.remove('dragover');
-  if (e.dataTransfer.files[0]) procesarCSV(e.dataTransfer.files[0]);
-});
-csvInput.addEventListener('change', () => { if (csvInput.files[0]) procesarCSV(csvInput.files[0]); });
-
-function parseCSVLine(line) {
-  const vals = [];
-  let cur = '', inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
-      else inQ = !inQ;
-    } else if (ch === ',' && !inQ) {
-      vals.push(cur.trim()); cur = '';
-    } else cur += ch;
-  }
-  vals.push(cur.trim());
-  return vals;
-}
-
-function procesarCSV(file) {
-  const reader = new FileReader();
-  reader.onload = e => {
-    const lines = e.target.result.split('\n').map(l => l.trim()).filter(l => l);
-    if (lines.length < 2) { showToast('El CSV está vacío o solo tiene encabezado', 'warning'); return; }
-
-    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
-    const required = ['nombre', 'precio_venta', 'categoria'];
-    const missing = required.filter(r => !headers.includes(r));
-    if (missing.length) {
-      showToast(`Faltan columnas: ${missing.join(', ')}`, 'error');
-      return;
-    }
-
-    csvData = lines.slice(1).map(line => {
-      const vals = parseCSVLine(line);
-      const obj = {};
-      headers.forEach((h, i) => obj[h] = vals[i] || '');
-      return obj;
-    }).filter(r => r.nombre);
-
-    renderCSVPreview();
-  };
-  reader.readAsText(file);
-}
-
-function validarCSVRow(r) {
-  const warnings = [];
-  const pv = parseFloat(r.precio_venta);
-  const pc = parseFloat(r.precio_costo);
-  const sa = parseInt(r.stock_actual);
-  if (!pv || pv <= 0) warnings.push('precio_venta vacío o cero');
-  if (pc < 0) warnings.push('precio_costo negativo');
-  if (sa > 9999) warnings.push(`stock_actual sospechoso (${sa}) — ¿se corrieron columnas?`);
-  if (r.ean && (r.ean.length < 8 || isNaN(Number(r.ean)))) warnings.push('EAN inválido');
-  return warnings;
-}
-
-function renderCSVPreview() {
-  const el = document.getElementById('csv-preview');
-  const btn = document.getElementById('btn-importar-csv');
-
-  if (csvData.length === 0) {
-    el.innerHTML = '<p style="color:var(--text-muted);font-size:0.867rem">No se encontraron filas válidas</p>';
-    btn.style.display = 'none';
-    return;
-  }
-
-  const conWarnings = csvData.filter(r => validarCSVRow(r).length > 0);
-  const preview = csvData.slice(0, 8);
-
-  el.innerHTML = `
-    <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px">
-      ${csvData.length} productos encontrados
-      ${conWarnings.length ? `· <span style="color:var(--amber)">⚠️ ${conWarnings.length} con advertencias</span>` : '· <span style="color:var(--green)">✅ Sin problemas detectados</span>'}
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Nombre</th><th>Categoría</th><th>EAN</th><th>P.Venta</th><th>P.Costo</th><th>Stock</th><th></th></tr></thead>
-        <tbody>
-          ${preview.map(r => {
-            const warns = validarCSVRow(r);
-            const rowStyle = warns.length ? 'background:var(--amber-dim)' : '';
-            return `<tr style="${rowStyle}">
-              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nombre}</td>
-              <td>${r.categoria || '—'}</td>
-              <td style="color:var(--text-dim);font-size:0.8rem">${r.ean || '—'}</td>
-              <td style="color:var(--teal)">${r.precio_venta ? '$' + parseFloat(r.precio_venta).toLocaleString('es-AR') : '<span style="color:var(--red)">—</span>'}</td>
-              <td style="color:var(--text-muted)">${r.precio_costo ? '$' + parseFloat(r.precio_costo).toLocaleString('es-AR') : '—'}</td>
-              <td>${r.stock_actual || '0'}</td>
-              <td style="font-size:0.733rem;color:var(--amber)">${warns.join('<br>')}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-    ${csvData.length > 8 ? `<div style="font-size:0.8rem;color:var(--text-dim);margin-top:6px">…y ${csvData.length - 8} más</div>` : ''}
-    ${conWarnings.length ? `<div style="margin-top:10px;padding:10px 14px;background:var(--amber-dim);border-radius:var(--radius-sm);font-size:0.867rem;color:var(--amber)">
-      ⚠️ Hay ${conWarnings.length} filas con posibles problemas de columnas. Revisá los valores antes de importar.
-    </div>` : ''}`;
-
-  btn.style.display = '';
-  btn.textContent = `✅ Importar ${csvData.length} productos`;
-}
-
-document.getElementById('btn-importar-csv').addEventListener('click', async () => {
-  if (!csvData.length) return;
-  const btn = document.getElementById('btn-importar-csv');
-  const previewEl = document.getElementById('csv-preview');
-  btn.disabled = true;
-  btn.textContent = 'Limpiando datos anteriores...';
-
-  // Antes de importar: buscar y borrar registros corruptos del lote anterior
-  // Los EANs del CSV actual son los "reales". Si en la DB hay un producto cuyo
-  // stock_actual coincide con algún precio del CSV → fue un precio mal importado como stock.
-  const preciosDelCSV = new Set(csvData.map(r => Math.round(parseFloat(r.precio_venta))).filter(Boolean));
-  const { data: todosDB } = await supabase.from('productos').select('id, stock_actual, ean');
-  const eansDelCSV = new Set(csvData.map(r => r.ean?.trim()).filter(Boolean));
-
-  const corruptos = (todosDB || []).filter(p =>
-    !eansDelCSV.has(p.ean) &&           // no está en el CSV actual (no lo vamos a actualizar)
-    preciosDelCSV.has(p.stock_actual)   // su stock coincide exactamente con un precio del CSV
-  );
-
-  let limpiadosCnt = 0;
-  if (corruptos.length) {
-    const ids = corruptos.map(p => p.id);
-    await supabase.from('productos').delete().in('id', ids);
-    limpiadosCnt = corruptos.length;
-  }
-
-  btn.textContent = 'Importando...';
-  let ok = 0, skip = 0;
-  const errores = [];
-
-  for (const row of csvData) {
-    const ean = row.ean?.trim() || null;
-    const sku = row.sku?.trim() || (ean ? `EAN-${ean}` : `SKU-${Date.now()}-${Math.random().toString(36).slice(2,6)}`);
-    const producto = {
-      ean,
-      sku,
-      nombre: row.nombre,
-      categoria: row.categoria || 'General',
-      precio_venta: parseFloat(row.precio_venta) || 0,
-      precio_costo: parseFloat(row.precio_costo) || 0,
-      stock_actual: parseInt(row.stock_actual) || 0,
-      stock_minimo: parseInt(row.stock_minimo) || 5,
-    };
-    let error;
-    if (ean) {
-      // Con EAN: upsert — actualiza si ya existe, inserta si no
-      ({ error } = await supabase.from('productos').upsert(producto, { onConflict: 'ean' }));
-    } else {
-      // Sin EAN: insert simple
-      ({ error } = await supabase.from('productos').insert(producto));
-    }
-    if (error) {
-      errores.push({ nombre: row.nombre, motivo: error.message || error.code });
-    } else ok++;
-  }
-
-  btn.disabled = false;
-  showToast(
-    `${ok} importados/actualizados${limpiadosCnt ? ` · ${limpiadosCnt} corruptos eliminados` : ''}${errores.length ? ` · ${errores.length} errores` : ''}`,
-    errores.length > 0 ? 'warning' : 'success', 6000
-  );
-
-  // Log de resultados
-  previewEl.innerHTML = `
-    <div style="margin-bottom:10px;font-size:0.867rem">
-      <span style="color:var(--green)">✅ ${ok} importados/actualizados</span>
-      ${limpiadosCnt ? `&nbsp;·&nbsp;<span style="color:var(--amber)">🧹 ${limpiadosCnt} registros corruptos eliminados</span>` : ''}
-      ${errores.length ? `&nbsp;·&nbsp;<span style="color:var(--red)">❌ ${errores.length} fallaron</span>` : ''}
-    </div>
-    ${errores.length ? `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Producto</th><th>Error</th></tr></thead>
-        <tbody>
-          ${errores.map(e => `<tr>
-            <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.nombre}</td>
-            <td style="color:var(--red);font-size:0.8rem">${e.motivo}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}`;
-
-  csvData = [];
-  btn.style.display = 'none';
-});
-
-document.getElementById('btn-descargar-template').addEventListener('click', () => {
-  const csv = 'nombre,ean,categoria,precio_venta,precio_costo,stock_actual,stock_minimo\nMulteta aluminio M,7891234567890,Muletas,15000,8000,10,3\nRodillera talle M,,Rodilleras,8500,4500,5,2';
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'template_productos.csv';
-  a.click();
-});
+// Inicializar Script
+init();

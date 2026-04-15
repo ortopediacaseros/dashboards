@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plantillas — Ortopedia Caseros</title>
+  <script>if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');</script>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .estado-relevado    { color: var(--text-2);  background: var(--surface-2); }
+    .estado-produccion  { color: var(--amber);   background: var(--amber-bg);  }
+    .estado-listo       { color: var(--green);   background: var(--green-bg);  }
+    .estado-entregado   { color: var(--text-3);  background: var(--surface-2); }
+    .estado-ajuste      { color: var(--red);     background: var(--red-bg);    }
+
+    .filter-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+
+    .estado-btn {
+      padding:6px 14px; border-radius:var(--radius-sm); font-size:12px;
+      font-weight:600; cursor:pointer; border:1px solid var(--border);
+      background:var(--surface-2); color:var(--text-2); transition:all .15s;
+    }
+    .estado-btn:hover { border-color:var(--brand); color:var(--brand); }
+    .estado-btn.activo { background:var(--teal-dim); border-color:var(--teal); color:var(--teal); }
+  </style>
+</head>
+<body>
+  <button class="hamburger" id="hamburger">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="logo">🦴 Ortopedia Caseros</div>
+      <a href="index.html">📊 Dashboard</a>
+      <a href="pos.html">🛒 POS / Venta</a>
+      <a href="caja.html">💰 Caja</a>
+      <a href="inventario.html">📦 Inventario</a>
+      <a href="stock-carga.html">📋 Carga de stock</a>
+      <a href="alquileres.html">🔄 Alquileres</a>
+      <a href="plantillas.html" class="active">🦶 Plantillas</a>
+      <a href="facturas.html">🧾 Facturas</a>
+      <a href="precios.html">🏷️ Precios</a>
+      <a href="reportes.html">📈 Reportes</a>
+    </nav>
+
+    <main class="main">
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h1>🦶 Plantillas ortopédicas</h1>
+          <p>Seguimiento de pedidos a medida</p>
+        </div>
+        <button class="btn btn-primary" id="btn-nuevo-pedido">+ Nuevo pedido</button>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card amber">
+          <div class="kpi-label">En proceso</div>
+          <div class="kpi-value" id="kpi-proceso">—</div>
+          <div class="kpi-sub">relevados + en producción</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-label">Listos para entregar</div>
+          <div class="kpi-value" id="kpi-listos">—</div>
+          <div class="kpi-sub">esperando al cliente</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-label">Requieren ajuste</div>
+          <div class="kpi-value" id="kpi-ajuste">—</div>
+          <div class="kpi-sub">volver al proveedor</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-label">Entregados (mes)</div>
+          <div class="kpi-value" id="kpi-entregados">—</div>
+          <div class="kpi-sub" id="kpi-ingresos-sub">—</div>
+        </div>
+      </div>
+
+      <!-- Tabla -->
+      <div class="card">
+        <div class="filter-row">
+          <input type="text" class="input" id="busqueda-plt" placeholder="🔍 Buscar cliente…" style="flex:1;min-width:180px">
+          <select class="select" id="filtro-estado-plt" style="min-width:160px">
+            <option value="">Todos los estados</option>
+            <option value="relevado">📋 Relevado</option>
+            <option value="en_produccion">⚙️ En producción</option>
+            <option value="listo">✅ Listo</option>
+            <option value="ajuste">🔧 Requiere ajuste</option>
+            <option value="entregado">📦 Entregado</option>
+          </select>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:40px;text-align:center">#</th>
+                <th>Cliente</th>
+                <th>Pie</th>
+                <th>Tipo / Talle</th>
+                <th>Proveedor</th>
+                <th>Estado</th>
+                <th>Pedido</th>
+                <th>Entrega prev.</th>
+                <th>Precio / Seña</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="plt-tbody">
+              <tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:32px">Cargando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Bottom nav mobile -->
+  <nav class="bottom-nav">
+    <a href="pos.html"><span class="icon">🛒</span>POS</a>
+    <a href="caja.html"><span class="icon">💰</span>Caja</a>
+    <a href="inventario.html"><span class="icon">📦</span>Stock</a>
+    <a href="index.html"><span class="icon">📊</span>Panel</a>
+  </nav>
+
+  <!-- Modal nuevo pedido -->
+  <div class="modal-overlay hidden" id="modal-nuevo-plt">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Nuevo pedido de plantilla</span>
+        <button class="modal-close" id="btn-cerrar-nuevo-plt">✕</button>
+      </div>
+      <form id="form-nuevo-plt">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nombre del cliente *</label>
+            <input type="text" class="input" name="cliente_nombre" required placeholder="Ej: María García">
+          </div>
+          <div class="form-group">
+            <label>Teléfono</label>
+            <input type="tel" class="input" name="cliente_telefono" placeholder="Ej: 11-1234-5678">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Pie</label>
+            <select class="select" name="pie">
+              <option value="ambos">Ambos</option>
+              <option value="izquierdo">Izquierdo</option>
+              <option value="derecho">Derecho</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tipo de plantilla</label>
+            <input type="text" class="input" name="tipo" placeholder="Ej: Blanda, Rígida, Semirígida…">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Talle</label>
+            <input type="text" class="input" name="talle" placeholder="Ej: 38, 42-43, M…">
+          </div>
+          <div class="form-group">
+            <label>Proveedor / Taller</label>
+            <input type="text" class="input" name="proveedor" placeholder="Ej: Ortotaller Norte">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Precio ($)</label>
+            <input type="number" class="input" name="precio" min="0" step="100" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>Seña ($)</label>
+            <input type="number" class="input" name="sena" min="0" step="100" placeholder="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Fecha del pedido *</label>
+            <input type="date" class="input" name="fecha_pedido" id="plt-fecha-pedido" required>
+          </div>
+          <div class="form-group">
+            <label>Entrega prevista</label>
+            <input type="date" class="input" name="fecha_entrega_prevista" id="plt-fecha-entrega">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notas / Medidas</label>
+          <textarea class="input" name="notas" rows="3" style="resize:vertical"
+            placeholder="Patologías, medidas específicas, correcciones solicitadas…"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Registrar pedido</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal detalle -->
+  <div class="modal-overlay hidden" id="modal-detalle-plt">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header">
+        <span class="modal-title" id="detalle-plt-titulo">Detalle del pedido</span>
+        <button class="modal-close" id="btn-cerrar-detalle-plt">✕</button>
+      </div>
+      <div id="detalle-plt-content"></div>
+      <div id="detalle-plt-estados" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px"></div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn btn-danger" id="btn-borrar-plt" style="margin-left:auto">🗑 Borrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const sidebar   = document.getElementById('sidebar');
+    const overlay   = document.getElementById('sidebar-overlay');
+    hamburger.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('open'); });
+    overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('open'); });
+  </script>
+
+  <script type="module" src="js/common.js"></script>
+  <script type="module" src="js/theme.js"></script>
+  <script type="module" src="js/plantillas.js"></script>
+</body>
+</html>
