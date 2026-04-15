@@ -590,7 +590,7 @@ function aplicarPerfilYMostrar(dataObjects) {
       nombre: m.nombre && rowObj[m.nombre] ? String(rowObj[m.nombre]) : 'Sin nombre',
       ean: m.ean && rowObj[m.ean] ? String(rowObj[m.ean]) : null,
       categoria: m.categoria && rowObj[m.categoria] ? String(rowObj[m.categoria]) : 'General',
-      proveedor: config.nombreDB,
+      proveedor: config.nombreDB || null,
       precio_venta: m.precio_venta && rowObj[m.precio_venta] ? parseFloat(rowObj[m.precio_venta]) : 0,
       precio_costo: m.precio_costo && rowObj[m.precio_costo] ? parseFloat(rowObj[m.precio_costo]) : 0,
       stock_actual: 0,
@@ -747,11 +747,13 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
     }
     if (error) {
       errores.push({ nombre: row.nombre, motivo: error.message });
-      // Si el primer producto ya falla con 401/403, detener y avisar
-      if (i === 0 && (error.code === '42501' || error.message?.includes('row-level') || error.message?.includes('JWT'))) {
+      // Al primer error, parar y mostrar detalle completo
+      if (i === 0) {
         btn.disabled = false;
-        showToast('Error de permisos: ' + error.message, 'error', 8000);
-        previewEl.innerHTML = `<div style="color:var(--red);font-size:13px;font-weight:600">❌ Error de permisos al guardar. Verificá que estés logueado.</div>`;
+        const detail = `code: ${error.code} | msg: ${error.message} | hint: ${error.hint || '-'} | details: ${error.details || '-'}`;
+        console.error('Supabase insert error:', error);
+        showToast('Error al guardar: ' + error.message, 'error', 10000);
+        previewEl.innerHTML = `<div style="color:var(--red);font-size:12px;font-weight:600;word-break:break-all">❌ Error en primer producto:<br><code style="font-size:11px">${detail}</code></div>`;
         return;
       }
     } else ok++;
