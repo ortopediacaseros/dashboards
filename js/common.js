@@ -16,6 +16,7 @@ const NAV_CONFIG = [
       { href: 'inventario.html',   icon: '📦', label: 'Inventario' },
       { href: 'stock-carga.html',  icon: '📋', label: 'Carga de stock' },
       { href: 'alquileres.html',   icon: '🔄', label: 'Alquileres' },
+      { href: 'plantillas.html',   icon: '🦶', label: 'Plantillas' },
       { href: 'precios.html',      icon: '🏷️', label: 'Precios' },
     ]
   },
@@ -54,7 +55,10 @@ function injectTopbar() {
     <div id="topbar-caja" style="margin-left:16px"></div>
     <div class="topbar-right">
       <div id="topbar-ventas-hoy" class="header-info" style="display:none"></div>
-      <div class="topbar-search">🔍 Buscar producto, SKU…</div>
+      <div class="topbar-search-wrap" style="position:relative">
+        <input type="text" id="topbar-search" class="input topbar-search" placeholder="🔍 Buscar producto, SKU…" autocomplete="off">
+        <div id="topbar-search-results" class="sidebar-search-results" style="position:absolute;top:calc(100% + 4px);right:0;left:auto;width:320px;z-index:500"></div>
+      </div>
       <a href="reportes.html" class="btn btn-ghost btn-sm">⬇ Exportar</a>
       <a href="pos.html" class="btn btn-primary btn-sm">+ Registrar venta</a>
       <button id="theme-toggle" class="theme-toggle-btn" title="Cambiar tema">🌙</button>
@@ -254,10 +258,30 @@ async function runSearch(q, resultsEl) {
   }).join('');
 }
 
+function bindTopbarSearch() {
+  const input = document.getElementById('topbar-search');
+  const results = document.getElementById('topbar-search-results');
+  if (!input || !results) return;
+  let timer;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (!q) { results.style.display = 'none'; return; }
+    timer = setTimeout(() => runSearch(q, results), 250);
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { results.style.display = 'none'; input.value = ''; }
+  });
+  document.addEventListener('click', e => {
+    if (!input.parentElement.contains(e.target)) results.style.display = 'none';
+  });
+}
+
 injectTopbar();
 updateSidebarLogo();
 buildSidebarNav();
 injectSidebarSearch();
+bindTopbarSearch();
 cargarEstadoCaja();
 cargarTopbarStats();
 cargarSidebarBadges();
