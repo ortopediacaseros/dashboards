@@ -25,7 +25,6 @@ const perfilGenerico = {
 let configProveedores = { generico: perfilGenerico };
 
 async function cargarPerfilesGuardados() {
-  // 1. Buscamos los perfiles en Supabase
   const { data, error } = await supabase.from('perfiles_proveedores').select('*');
   
   if (error) { 
@@ -34,10 +33,8 @@ async function cargarPerfilesGuardados() {
     return; 
   }
 
-  // 2. Reiniciamos el diccionario base
   configProveedores = { generico: perfilGenerico };
   
-  // 3. Inyectamos los que vinieron de la base de datos
   if (data) {
     data.forEach(prov => {
       configProveedores[prov.id] = {
@@ -48,7 +45,6 @@ async function cargarPerfilesGuardados() {
     });
   }
 
-  // Actualizar el <select> de Carga Masiva
   const selector = document.getElementById('csv-proveedor-selector');
   if (selector) {
     selector.innerHTML = '';
@@ -59,7 +55,6 @@ async function cargarPerfilesGuardados() {
     }
   }
 
-  // Actualizar la lista de la pestaña "Gestionar"
   const lista = document.getElementById('lista-perfiles-guardados');
   if (lista) {
     lista.innerHTML = Object.entries(configProveedores).map(([id, config]) => `
@@ -95,13 +90,9 @@ async function init() {
   const session = await checkAuth();
   if (!session) return;
 
-  // Carga inicial de perfiles de proveedores
   await cargarPerfilesGuardados();
-  
-  // Carga de inventario
   await cargarProductos();
 
-  // Suscripción Realtime a la tabla productos
   supabase.channel('inv-cambios')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, () => {
       cargarProductos();
@@ -177,7 +168,6 @@ function sortIcon(col) {
 function renderTabla() {
   let productos = todosProductos;
 
-  // Aplicar filtros
   if (filtroCategoria) productos = productos.filter(p => p.categoria === filtroCategoria);
   if (filtroProveedor) productos = productos.filter(p => p.proveedor === filtroProveedor);
   if (filtroStock === 'critico') productos = productos.filter(p => p.stock_actual <= p.stock_minimo);
@@ -194,14 +184,12 @@ function renderTabla() {
     );
   }
 
-  // Aplicar orden
   productos = [...productos].sort((a, b) => {
     let va = a[sortCol] ?? '', vb = b[sortCol] ?? '';
     const res = typeof va === 'string' ? va.localeCompare(vb, 'es') : va - vb;
     return sortDir === 'asc' ? res : -res;
   });
 
-  // Actualizar indicadores visuales de orden en cabecera
   const thMap = {
     nombre: 'th-nombre', stock_actual: 'th-stock', precio_venta: 'th-pventa',
     precio_costo: 'th-pcosto', proveedor: 'th-proveedor'
@@ -262,7 +250,6 @@ function renderTabla() {
   }).join('');
 }
 
-// Event Listeners Filtros
 document.getElementById('filtro-categoria').addEventListener('change', e => { filtroCategoria = e.target.value; renderTabla(); });
 document.getElementById('filtro-proveedor').addEventListener('change', e => { filtroProveedor = e.target.value; renderTabla(); });
 document.getElementById('filtro-stock').addEventListener('change', e => { filtroStock = e.target.value; renderTabla(); });
@@ -378,7 +365,7 @@ document.getElementById('form-nuevo-inventario').addEventListener('submit', asyn
 });
 
 // ══════════════════════════════════════════════════════════
-// CARGA MASIVA AVANZADA (ESCANER + EXCEL CON CORTADOR DE BASURA)
+// CARGA MASIVA AVANZADA (ESCANER + EXCEL MULTI-HOJA)
 // ══════════════════════════════════════════════════════════
 
 let bulkScanner = null;
@@ -389,7 +376,7 @@ let headersExtraidos = [];
 
 document.getElementById('btn-carga-masiva').addEventListener('click', () => {
   bulkCount = 0;
-  cargarPerfilesGuardados(); // Refresca lista en caso de cambios externos
+  cargarPerfilesGuardados(); 
   document.getElementById('modal-carga-masiva').classList.remove('hidden');
 });
 
@@ -451,18 +438,33 @@ function procesarArchivoExcelOCSV(file) {
   reader.onload = e => {
     try {
       const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
       
-      if (rows.length < 2) { showToast('El archivo está vacío', 'warning'); return; }
+      if (data.byteLength === 0) {
+        showToast('El archivo pesa 0 bytes. Asegurate de cerrarlo en Excel antes de subirlo.', 'error');
+        return;
+      }
 
-      // Búsqueda inteligente de cabecera (ignorar "basura" de arriba)
+      const workbook = XLSX.read(data, { type: 'array' });
+      
+      let bestRows = [];
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
+        if (rows.length > bestRows.length) {
+          bestRows = rows;
+        }
+      }
+
+      if (bestRows.length < 2) { 
+        showToast('El archivo no tiene filas suficientes o está vacío.', 'warning'); 
+        return; 
+      }
+
       const keywords = ['código', 'codigo', 'descripción', 'descripcion', 'producto', 'artículo', 'articulo', 'precio', 'ean', 'barra', 'rubro', 'categoría', 'talle', 'detalle', 'unitario'];
       let headerIndex = 0; let maxScore = 0;
 
-      for (let i = 0; i < Math.min(rows.length, 100); i++) {
-        const row = rows[i];
+      for (let i = 0; i < Math.min(bestRows.length, 100); i++) {
+        const row = bestRows[i];
         if (!row || !row.length) continue;
         let score = 0;
         row.forEach(cell => {
@@ -472,20 +474,19 @@ function procesarArchivoExcelOCSV(file) {
         if (score > maxScore) { maxScore = score; headerIndex = i; }
       }
 
-      const rawHeaders = rows[headerIndex];
+      const rawHeaders = bestRows[headerIndex];
       const headers = [];
       const headerCounts = {}; 
 
       for (let i = 0; i < rawHeaders.length; i++) {
         let h = String(rawHeaders[i] || '').toLowerCase().trim();
-        if (!h) h = `columna_${i + 1}`; // Bautizar columnas vacías
+        if (!h) h = `columna_${i + 1}`; 
         if (headerCounts[h]) { headerCounts[h]++; h = `${h}_${headerCounts[h]}`; } 
         else { headerCounts[h] = 1; }
         headers.push(h);
       }
 
-      // Filtrar filas completamente en blanco
-      const validDataRows = rows.slice(headerIndex + 1).filter(r => r.length > 0 && r.some(c => c !== '' && c !== undefined && c !== null));
+      const validDataRows = bestRows.slice(headerIndex + 1).filter(r => r.length > 0 && r.some(c => c !== '' && c !== undefined && c !== null));
 
       const dataObjects = validDataRows.map(rowArray => {
         const obj = {};
@@ -541,7 +542,6 @@ function armarUIAsignacionDeColumnas(headersFile) {
   showToast('Excel analizado. Revisá la asignación de columnas.', 'success');
 }
 
-// Guardado de Perfil en la Nube
 document.getElementById('btn-save-provider').addEventListener('click', async () => {
   const nombreProv = document.getElementById('new-prov-name').value.trim();
   if (!nombreProv) { showToast('Falta el nombre del proveedor', 'warning'); return; }
@@ -584,7 +584,6 @@ function aplicarPerfilYMostrar(dataObjects) {
   const m = config.mapeo;
 
   csvData = dataObjects.map(rowObj => {
-    // Si no tiene nombre mapeado (o la columna del excel está vacía), lo ignoramos
     if(m.nombre && !rowObj[m.nombre]) return null;
 
     return {
