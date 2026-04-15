@@ -708,8 +708,26 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
   const omitir = document.getElementById('csv-omitir-sin-precio')?.checked;
   const filas = omitir ? csvData.filter(r => validarCSVRow(r).length === 0) : csvData;
 
+  const total = filas.length;
+  previewEl.innerHTML = `
+    <div id="import-progress-wrap" style="padding:12px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:600">Importando productos…</span>
+        <span id="import-progress-counter" style="font-size:12px;color:var(--text-muted)">0 / ${total}</span>
+      </div>
+      <div style="height:6px;background:var(--border-strong);border-radius:3px;overflow:hidden">
+        <div id="import-progress-fill" style="height:100%;width:0%;background:var(--teal);border-radius:3px;transition:width 0.2s"></div>
+      </div>
+      <div id="import-progress-status" style="font-size:11px;color:var(--text-muted);margin-top:6px"></div>
+    </div>`;
+
+  const fillEl = document.getElementById('import-progress-fill');
+  const counterEl = document.getElementById('import-progress-counter');
+  const statusEl = document.getElementById('import-progress-status');
+
   let ok = 0; const errores = [];
-  for (const row of filas) {
+  for (let i = 0; i < filas.length; i++) {
+    const row = filas[i];
     const ean = row.ean ? String(row.ean).trim() : null;
     const sku = ean ? `EAN-${ean}` : `SKU-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
 
@@ -721,11 +739,16 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
     }
     if (error) errores.push({ nombre: row.nombre, motivo: error.message });
     else ok++;
+
+    const pct = Math.round((i + 1) / total * 100);
+    fillEl.style.width = pct + '%';
+    counterEl.textContent = `${i + 1} / ${total}`;
+    statusEl.textContent = `${ok} OK${errores.length ? ` · ${errores.length} error${errores.length !== 1 ? 'es' : ''}` : ''}`;
   }
 
   btn.disabled = false;
   showToast(`${ok} guardados${errores.length ? ` · ${errores.length} errores` : ''}`, errores.length > 0 ? 'warning' : 'success', 6000);
-  previewEl.innerHTML = `<div style="color:var(--green);font-size:0.9rem;font-weight:600">✅ Importación finalizada con éxito.</div>`;
+  previewEl.innerHTML = `<div style="color:var(--green);font-size:0.9rem;font-weight:600">✅ Importación finalizada: ${ok} producto${ok !== 1 ? 's' : ''} guardado${ok !== 1 ? 's' : ''}${errores.length ? ` · ${errores.length} con error` : ''}.</div>`;
   csvData = []; btn.style.display = 'none';
   cargarProductos();
 });
