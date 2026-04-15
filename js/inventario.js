@@ -703,6 +703,14 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
   if (!csvData.length) return;
   const btn = document.getElementById('btn-importar-csv');
   const previewEl = document.getElementById('csv-preview');
+
+  // Verificar sesión activa antes de empezar
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    showToast('Sesión expirada. Recargá la página e iniciá sesión de nuevo.', 'error', 6000);
+    return;
+  }
+
   btn.disabled = true; btn.textContent = 'Guardando en base de datos...';
 
   const omitir = document.getElementById('csv-omitir-sin-precio')?.checked;
@@ -737,8 +745,16 @@ document.getElementById('btn-importar-csv').addEventListener('click', async () =
     } else {
       ({ error } = await supabase.from('productos').insert({ sku, ...row }));
     }
-    if (error) errores.push({ nombre: row.nombre, motivo: error.message });
-    else ok++;
+    if (error) {
+      errores.push({ nombre: row.nombre, motivo: error.message });
+      // Si el primer producto ya falla con 401/403, detener y avisar
+      if (i === 0 && (error.code === '42501' || error.message?.includes('row-level') || error.message?.includes('JWT'))) {
+        btn.disabled = false;
+        showToast('Error de permisos: ' + error.message, 'error', 8000);
+        previewEl.innerHTML = `<div style="color:var(--red);font-size:13px;font-weight:600">❌ Error de permisos al guardar. Verificá que estés logueado.</div>`;
+        return;
+      }
+    } else ok++;
 
     const pct = Math.round((i + 1) / total * 100);
     fillEl.style.width = pct + '%';
