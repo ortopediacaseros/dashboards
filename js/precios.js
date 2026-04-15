@@ -21,36 +21,48 @@ async function cargarProductos() {
 
   if (error) { showToast('Error al cargar productos', 'error'); return; }
   todosProductos = data || [];
-  llenarCategorias();
+  llenarFiltros();
 }
 
-function llenarCategorias() {
-  const cats = [...new Set(todosProductos.map(p => p.categoria))].sort();
-  const sel = document.getElementById('sel-categoria');
-  sel.innerHTML = '<option value="">Todas las categorías</option>';
+function llenarFiltros() {
+  const cats = [...new Set(todosProductos.map(p => p.categoria).filter(Boolean))].sort();
+  const selCat = document.getElementById('sel-categoria');
+  selCat.innerHTML = '<option value="">Todas las categorías</option>';
   cats.forEach(c => {
     const opt = document.createElement('option');
     opt.value = c; opt.textContent = c;
-    sel.appendChild(opt);
+    selCat.appendChild(opt);
+  });
+
+  const provs = [...new Set(todosProductos.map(p => p.proveedor).filter(Boolean))].sort();
+  const selProv = document.getElementById('sel-proveedor');
+  selProv.innerHTML = '<option value="">Todos los proveedores</option>';
+  provs.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    selProv.appendChild(opt);
   });
 }
 
 document.getElementById('btn-preview').addEventListener('click', () => {
-  const cat = document.getElementById('sel-categoria').value;
+  const prov = document.getElementById('sel-proveedor').value;
+  const cat  = document.getElementById('sel-categoria').value;
   const tipo = document.getElementById('sel-tipo').value;
-  const pct = parseFloat(document.getElementById('input-pct').value);
+  const pct  = parseFloat(document.getElementById('input-pct').value);
 
   if (isNaN(pct) || pct === 0) {
     showToast('Ingresá un porcentaje distinto de 0', 'warning');
     return;
   }
 
-  productosFiltrados = cat
-    ? todosProductos.filter(p => p.categoria === cat)
-    : [...todosProductos];
+  productosFiltrados = todosProductos.filter(p => {
+    if (prov && p.proveedor !== prov) return false;
+    if (cat  && p.categoria !== cat)  return false;
+    return true;
+  });
 
   if (productosFiltrados.length === 0) {
-    showToast('No hay productos para la categoría seleccionada', 'warning');
+    showToast('No hay productos para los filtros seleccionados', 'warning');
     return;
   }
 
@@ -62,8 +74,9 @@ document.getElementById('btn-preview').addEventListener('click', () => {
 
   const tipoLabel = tipo === 'venta' ? 'venta' : tipo === 'costo' ? 'costo' : 'venta y costo';
   const dir = pct > 0 ? `+${pct}%` : `${pct}%`;
+  const scope = [prov, cat].filter(Boolean).join(' · ') || 'Todos los productos';
   document.getElementById('preview-titulo').textContent = `Preview — ${dir} en precio de ${tipoLabel}`;
-  document.getElementById('preview-count').textContent = `${productosFiltrados.length} productos`;
+  document.getElementById('preview-count').textContent = `${scope} · ${productosFiltrados.length} productos`;
 });
 
 function renderPreview(productos, pct, tipo) {
