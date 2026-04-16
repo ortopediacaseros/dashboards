@@ -666,6 +666,18 @@ function dibujarTicket(canvas, numeroTicket, items, total, descPct, medioPago) {
   ctx.fillText('ortopediacaseros.com', W / 2, y + 14);
 }
 
+// Acorta una URL via is.gd (gratis, sin API key, CORS ok)
+async function acortarUrl(url) {
+  try {
+    const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`);
+    if (res.ok) {
+      const short = (await res.text()).trim();
+      if (short.startsWith('https://is.gd/')) return short;
+    }
+  } catch { /* fallback a URL original */ }
+  return url;
+}
+
 // Sube el canvas como PNG a Supabase Storage y devuelve la URL pública
 async function subirTicket(canvas, numeroTicket) {
   const statusEl = document.getElementById('ticket-upload-status');
@@ -689,7 +701,8 @@ async function subirTicket(canvas, numeroTicket) {
       });
 
       if (res.ok) {
-        const url = `${SUPABASE_URL}/storage/v1/object/public/tickets/${filename}`;
+        const rawUrl = `${SUPABASE_URL}/storage/v1/object/public/tickets/${filename}`;
+        const url = await acortarUrl(rawUrl);
         statusEl.textContent = '✅ Comprobante listo para compartir';
         resolve(url);
       } else {
