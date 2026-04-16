@@ -290,7 +290,7 @@ async function cargarVentasRecientes() {
   const ayer = new Date(Date.now() - 86400000).toISOString().split('T')[0];
   const { data, error } = await supabase
     .from('ventas')
-    .select('id, numero_ticket, fecha, total, medio_pago, descuento_pct, observaciones')
+    .select('id, numero_ticket, fecha, total, medio_pago, descuento_pct, observaciones, ticket_url')
     .gte('fecha', ayer + 'T00:00:00')
     .order('fecha', { ascending: false })
     .limit(15);
@@ -314,6 +314,7 @@ async function cargarVentasRecientes() {
       </div>
       <div style="display:flex;align-items:center;gap:10px">
         <span style="font-family:'Syne',sans-serif;font-weight:700">${formatMoney(v.total)}</span>
+        ${v.ticket_url ? `<a href="${v.ticket_url}" target="_blank" class="btn btn-ghost" style="padding:4px 8px;font-size:12px" title="Ver comprobante">🖼</a>` : ''}
         <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px"
           onclick="window.abrirEditTicket('${v.id}')">✏️ Editar</button>
       </div>
@@ -680,18 +681,6 @@ function dibujarTicket(canvas, numeroTicket, items, total, descPct, medioPago) {
   ctx.fillText('ortopediacaseros.com', W / 2, y + 14);
 }
 
-// Acorta una URL via TinyURL
-async function acortarUrl(url) {
-  try {
-    const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`);
-    if (res.ok) {
-      const short = (await res.text()).trim();
-      if (short.startsWith('https://tinyurl.com/')) return short;
-    }
-  } catch { /* fallback a URL original */ }
-  return url;
-}
-
 // Sube el canvas como PNG a Supabase Storage y devuelve la URL pública
 async function subirTicket(canvas, numeroTicket) {
   const statusEl = document.getElementById('ticket-upload-status');
@@ -715,10 +704,11 @@ async function subirTicket(canvas, numeroTicket) {
       });
 
       if (res.ok) {
-        const rawUrl = `${SUPABASE_URL}/storage/v1/object/public/tickets/${filename}`;
-        const url = await acortarUrl(rawUrl);
+        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/tickets/${filename}`;
+        // Guardar URL en el registro de venta para poder re-ver después
+        await supabase.from('ventas').update({ ticket_url: publicUrl }).eq('numero_ticket', numeroTicket);
         statusEl.textContent = '✅ Comprobante listo para compartir';
-        resolve(url);
+        resolve(publicUrl);
       } else {
         statusEl.textContent = 'Comprobante generado (sin subir)';
         resolve(null);
