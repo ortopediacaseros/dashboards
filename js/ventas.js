@@ -42,7 +42,7 @@ async function cargarVentas() {
   tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-3)">Cargando…</td></tr>`;
 
   let q = supabase.from('ventas')
-    .select('id, numero_ticket, fecha, total, medio_pago, descuento_pct, observaciones, estado, items_count:items_venta(count)')
+    .select('id, numero_ticket, fecha, total, medio_pago, descuento_pct, observaciones, estado, ticket_url, items_count:items_venta(count)')
     .order('fecha', { ascending: false });
 
   if (desde) q = q.gte('fecha', desde + 'T00:00:00');
@@ -66,7 +66,7 @@ async function cargarVentas() {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--red)">Error: ${e2.message}</td></tr>`;
       return;
     }
-    allVentas = (d2 || []).map(v => ({ ...v, _cnt: null }));
+    allVentas = (d2 || []).map(v => ({ ...v, _cnt: null, ticket_url: null }));
   } else {
     allVentas = (data || []).map(v => ({
       ...v,
@@ -112,7 +112,10 @@ function renderTabla() {
       <td>${desc}</td>
       <td style="font-weight:600">${formatMoney(v.total)}</td>
       <td>${badge}</td>
-      <td><button class="btn btn-ghost btn-sm" data-id="${v.id}">Ver</button></td>
+      <td style="display:flex;gap:6px;align-items:center">
+        ${v.ticket_url ? `<a href="${v.ticket_url}" target="_blank" class="btn btn-ghost btn-sm" title="Ver comprobante">🖼</a>` : ''}
+        <button class="btn btn-ghost btn-sm" data-id="${v.id}">Ver</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -206,6 +209,15 @@ function renderDetalle(v, items) {
     </div>`;
 
   detalleActions.innerHTML = '';
+
+  // Comprobante imagen si existe
+  if (v.ticket_url) {
+    const imgWrap = document.createElement('div');
+    imgWrap.style.cssText = 'margin-bottom:12px;text-align:center';
+    imgWrap.innerHTML = `<a href="${v.ticket_url}" target="_blank" class="btn btn-ghost btn-full">🖼 Ver comprobante PDF/imagen</a>`;
+    detalleActions.appendChild(imgWrap);
+  }
+
   if (!anulada) {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;gap:8px';
@@ -217,11 +229,18 @@ function renderDetalle(v, items) {
 
     const btnAnular = document.createElement('button');
     btnAnular.className = 'btn btn-danger btn-full';
-    btnAnular.textContent = '✕ Anular';
+    btnAnular.textContent = '↩ Anular';
     btnAnular.addEventListener('click', () => anularVenta(v.id));
+
+    const btnBorrar = document.createElement('button');
+    btnBorrar.className = 'btn btn-ghost btn-sm';
+    btnBorrar.title = 'Elimina sin restaurar stock';
+    btnBorrar.textContent = '🗑';
+    btnBorrar.addEventListener('click', () => borrarVenta(v.id, v.numero_ticket));
 
     wrap.appendChild(btnEditar);
     wrap.appendChild(btnAnular);
+    wrap.appendChild(btnBorrar);
     detalleActions.appendChild(wrap);
   }
 }
@@ -330,6 +349,16 @@ function exportarCSV() {
   const a    = Object.assign(document.createElement('a'), { href: url, download: `tickets_${hoy()}.csv` });
   a.click();
   URL.revokeObjectURL(url);
+}
+
+async function borrarVenta(id, nro) {
+  if (!confirm(`¿Borrar el ticket #${nro}? No se restaurará el stock.`)) return;
+  await supabase.from('items_venta').delete().eq('venta_id', id);
+  const { error } = await supabase.from('ventas').delete().eq('id', id);
+  if (error) { showToast('Error al borrar: ' + error.message, 'error'); return; }
+  showToast(`Ticket #${nro} eliminado`, 'success');
+  overlay.classList.add('hidden');
+  await cargarVentas();
 }
 
 async function init() {
