@@ -356,6 +356,46 @@ async function cargarReporteMensual() {
       </div>`;
   }
 
+  // Productos sin movimiento
+  const sinMovEl = document.getElementById('tabla-sin-movimiento');
+  if (sinMovEl) {
+    // IDs vendidos en el período
+    const vendidosIds = new Set();
+    rows.forEach(v => (v.items_venta || []).forEach(it => vendidosIds.add(it.producto_id)));
+
+    // Todos los productos con stock > 0
+    const { data: allProds } = await supabase
+      .from('productos')
+      .select('id, nombre, categoria, stock_actual, precio_venta')
+      .gt('stock_actual', 0)
+      .order('nombre');
+
+    const sinMov = (allProds || []).filter(p => !vendidosIds.has(p.id));
+
+    if (sinMov.length === 0) {
+      sinMovEl.innerHTML = '<p class="text-muted center">¡Todos los productos con stock tuvieron movimiento este mes!</p>';
+    } else {
+      sinMovEl.innerHTML = `
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${sinMov.length} producto${sinMov.length !== 1 ? 's' : ''} sin ventas en el período</p>
+        <table class="data-table">
+          <thead><tr>
+            <th>Producto</th><th>Categoría</th>
+            <th class="text-right">Stock</th><th class="text-right">Precio</th>
+          </tr></thead>
+          <tbody>
+            ${sinMov.slice(0, 30).map(p => `
+              <tr>
+                <td>${p.nombre}</td>
+                <td class="text-muted">${p.categoria || '—'}</td>
+                <td class="text-right">${p.stock_actual}</td>
+                <td class="text-right">${formatMoney(p.precio_venta)}</td>
+              </tr>`).join('')}
+            ${sinMov.length > 30 ? `<tr><td colspan="4" class="text-muted center">… y ${sinMov.length - 30} más</td></tr>` : ''}
+          </tbody>
+        </table>`;
+    }
+  }
+
   // Store for CSV export
   window._reporteMensualData = { porDia, mes, año, diasMes };
 }

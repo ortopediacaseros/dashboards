@@ -34,7 +34,7 @@ async function init() {
   document.getElementById('cat-periodo').textContent =
     mes.charAt(0).toUpperCase() + mes.slice(1);
 
-  await Promise.all([cargarKPIs(), cargarStockTable(), cargarAlertas(), cargarCategorias(), verificarCaja()]);
+  await Promise.all([cargarKPIs(), cargarStockTable(), cargarAlertas(), cargarCategorias(), verificarCaja(), cargarParaHoy()]);
 
   bindStockFilters();
 
@@ -387,6 +387,70 @@ async function verificarCaja() {
       document.getElementById('modal-caja-dash').classList.add('hidden');
     });
   }
+}
+
+async function cargarParaHoy() {
+  const hoy = new Date().toISOString().split('T')[0];
+  const el  = document.getElementById('para-hoy-contenido');
+  const badge = document.getElementById('para-hoy-badge');
+
+  const [{ data: alquileres }, { data: plantillas }] = await Promise.all([
+    supabase
+      .from('alquileres')
+      .select('id, cliente_nombre, productos(nombre), fecha_fin_prevista, deposito')
+      .lte('fecha_fin_prevista', hoy)
+      .not('estado', 'eq', 'devuelto'),
+    supabase
+      .from('pedidos_plantillas')
+      .select('id, cliente_nombre, pie, estado, fecha_entrega_estimada')
+      .eq('estado', 'listo'),
+  ]);
+
+  const items = [];
+
+  (alquileres || []).forEach(a => {
+    const venceHoy = a.fecha_fin_prevista === hoy;
+    items.push({
+      tipo: 'alquiler',
+      urgente: !venceHoy, // ya vencido
+      titulo: a.cliente_nombre || 'Cliente',
+      sub: `${a.productos?.nombre || '—'} · depósito ${formatMoney(a.deposito || 0)}`,
+      tag: venceHoy ? '🔔 Vence hoy' : '🔴 Vencido',
+      tagColor: venceHoy ? 'var(--amber)' : 'var(--red)',
+      href: 'alquileres.html',
+    });
+  });
+
+  (plantillas || []).forEach(p => {
+    items.push({
+      tipo: 'plantilla',
+      urgente: false,
+      titulo: p.cliente_nombre || 'Cliente',
+      sub: `Pie ${p.pie || '—'}`,
+      tag: '✅ Lista para entregar',
+      tagColor: 'var(--green)',
+      href: 'plantillas.html',
+    });
+  });
+
+  if (items.length === 0) {
+    el.innerHTML = `<div class="sum-row" style="justify-content:center;color:var(--text-3)">Todo al día — sin pendientes urgentes ✓</div>`;
+    return;
+  }
+
+  badge.style.display = '';
+  badge.className = 'badge b-red';
+  badge.textContent = items.length;
+
+  el.innerHTML = items.map(it => `
+    <div class="sum-row" style="gap:10px">
+      <span style="color:${it.tagColor};font-size:11px;font-weight:600;min-width:110px">${it.tag}</span>
+      <span style="flex:1">
+        <strong>${it.titulo}</strong>
+        <span style="color:var(--text-3);font-size:12px;margin-left:6px">${it.sub}</span>
+      </span>
+      <a href="${it.href}" class="btn btn-ghost btn-sm">Ver →</a>
+    </div>`).join('');
 }
 
 init();

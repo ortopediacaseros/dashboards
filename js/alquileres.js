@@ -63,10 +63,35 @@ function actualizarKPIs() {
     a.estado === 'devuelto' && new Date(a.fecha_devolucion || a.updated_at) >= inicioMes
   ).length;
 
+  // Duración promedio (solo devueltos con fecha_devolucion)
+  const devueltos = todosAlquileres.filter(a => a.estado === 'devuelto' && a.fecha_devolucion && a.fecha_inicio);
+  const durPromedio = devueltos.length > 0
+    ? Math.round(devueltos.reduce((s, a) => {
+        return s + (new Date(a.fecha_devolucion) - new Date(a.fecha_inicio)) / 86400000;
+      }, 0) / devueltos.length)
+    : null;
+
+  // Producto más alquilado (entre todos los alquileres)
+  const conteo = {};
+  todosAlquileres.forEach(a => {
+    const nom = a.productos?.nombre;
+    if (nom) conteo[nom] = (conteo[nom] || 0) + 1;
+  });
+  const masAlq = Object.entries(conteo).sort((a, b) => b[1] - a[1])[0];
+
+  // Ingresos totales (precio_dia × dias reales de todos los alquileres)
+  const ingresos = todosAlquileres.reduce((s, a) => s + Number(a.precio_dia || 0) * Math.max(1,
+    Math.ceil((new Date(a.fecha_devolucion || a.fecha_fin_prevista) - new Date(a.fecha_inicio)) / 86400000)
+  ), 0);
+
   document.getElementById('kpi-activos').textContent       = activos;
   document.getElementById('kpi-vencidos').textContent      = vencidos;
   document.getElementById('kpi-depositos').textContent     = formatMoney(depositos);
   document.getElementById('kpi-devueltos-mes').textContent = devueltosMes;
+  document.getElementById('kpi-duracion-prom').textContent = durPromedio !== null ? durPromedio : '—';
+  document.getElementById('kpi-mas-alquilado').textContent = masAlq ? masAlq[0] : '—';
+  document.getElementById('kpi-mas-alquilado-cnt').textContent = masAlq ? `${masAlq[1]} vez${masAlq[1] !== 1 ? 'es' : ''}` : '—';
+  document.getElementById('kpi-ingresos-alq').textContent  = formatMoney(ingresos);
 }
 
 function renderTabla() {

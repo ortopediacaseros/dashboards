@@ -201,6 +201,8 @@ async function cargarHistorial() {
     return;
   }
 
+  const medioLabels = { efectivo: '💵 Efectivo', debito: '💳 Débito', credito: '💳 Crédito', transferencia: '📲 Transf.' };
+
   tbody.innerHTML = data.map(c => {
     const diff = c.diferencia;
     const diffClass = diff == null ? '' : diff === 0 ? 'badge-green' : diff > 0 ? 'badge-amber' : 'badge-red';
@@ -209,7 +211,7 @@ async function cargarHistorial() {
       ? '<span class="badge badge-teal">Abierta</span>'
       : '<span class="badge badge-green">Cerrada</span>';
     return `
-      <tr>
+      <tr style="cursor:pointer" onclick="toggleDesglose('${c.id}', this)">
         <td>${c.fecha}</td>
         <td>${formatMoney(c.efectivo_inicial)}</td>
         <td>${formatMoney(c.total_ventas_dia)}</td>
@@ -217,8 +219,41 @@ async function cargarHistorial() {
         <td><span class="badge ${diffClass}">${diffText}</span></td>
         <td>${estadoBadge}</td>
         <td style="color:var(--text-dim);font-size:12px">${c.comentarios || '—'}</td>
+      </tr>
+      <tr id="desglose-${c.id}" style="display:none">
+        <td colspan="7" style="padding:0">
+          <div id="desglose-inner-${c.id}" style="padding:12px 18px;background:var(--surface-2);font-size:12px;color:var(--text-muted)">
+            Cargando desglose…
+          </div>
+        </td>
       </tr>`;
   }).join('');
+
+  // expose toggle globally
+  window.toggleDesglose = async (cajaId, row) => {
+    const desgRow = document.getElementById(`desglose-${cajaId}`);
+    const inner   = document.getElementById(`desglose-inner-${cajaId}`);
+    if (desgRow.style.display !== 'none') { desgRow.style.display = 'none'; return; }
+    desgRow.style.display = '';
+    inner.textContent = 'Cargando…';
+    const { data: ventas } = await supabase
+      .from('ventas')
+      .select('total, medio_pago')
+      .eq('caja_id', cajaId)
+      .not('estado', 'eq', 'anulada');
+    const por = {};
+    (ventas || []).forEach(v => { por[v.medio_pago] = (por[v.medio_pago] || 0) + Number(v.total); });
+    const total = Object.values(por).reduce((s, v) => s + v, 0);
+    if (Object.keys(por).length === 0) { inner.textContent = 'Sin ventas registradas.'; return; }
+    inner.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center">
+      ${Object.entries(por).map(([mp, val]) => `
+        <div><span style="color:var(--text-3)">${medioLabels[mp] || mp}</span>
+        <strong style="margin-left:6px">${formatMoney(val)}</strong>
+        <span style="color:var(--text-4);margin-left:4px">(${total > 0 ? Math.round(val/total*100) : 0}%)</span></div>`).join('')}
+      <div style="margin-left:auto"><span style="color:var(--text-3)">Total</span>
+        <strong style="margin-left:6px;color:var(--teal)">${formatMoney(total)}</strong></div>
+    </div>`;
+  };
 }
 
 init();

@@ -171,6 +171,20 @@
         </div>
       </div>
 
+      <!-- PARA HOY -->
+      <div class="panel" style="margin-bottom:18px" id="para-hoy-panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">📅 Para hoy</div>
+            <div class="panel-sub">Alquileres que vencen hoy · Plantillas listas para entregar</div>
+          </div>
+          <span id="para-hoy-badge" style="display:none"></span>
+        </div>
+        <div class="panel-body panel-body-flush" id="para-hoy-contenido">
+          <div style="padding:16px 0;text-align:center;color:var(--text-3)">Cargando…</div>
+        </div>
+      </div>
+
       <!-- STOCK TABLE + ALERTAS + CATEGORÍAS -->
       <div class="grid-2">
         <div class="panel" style="overflow:hidden">
@@ -276,5 +290,9 @@
   <script type="module" src="js/common.js"></script>
   <script type="module" src="js/theme.js"></script>
   <script type="module" src="js/index.js"></script>
+  <script type="module">
+    import { iniciarNotificaciones } from './js/notificaciones.js';
+    iniciarNotificaciones();
+  </script>
 </body>
 </html>
