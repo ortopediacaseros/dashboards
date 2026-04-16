@@ -437,26 +437,39 @@
     });
   </script>
 
-  <!-- Modal WhatsApp ticket -->
-  <div class="modal-overlay hidden" id="modal-wa-ticket">
-    <div class="modal" style="max-width:400px">
+  <!-- Modal ticket comprobante -->
+  <div class="modal-overlay hidden" id="modal-ticket">
+    <div class="modal" style="max-width:460px">
       <div class="modal-header">
-        <span class="modal-title">📲 Compartir ticket</span>
-        <button class="modal-close" id="btn-cerrar-wa">✕</button>
+        <span class="modal-title">🧾 Comprobante de venta</span>
+        <button class="modal-close" id="btn-cerrar-ticket-modal">✕</button>
       </div>
-      <div id="wa-ticket-resumen" style="background:var(--surface-2);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.6"></div>
+
+      <!-- Preview del ticket -->
+      <div id="ticket-preview-wrap" style="display:flex;justify-content:center;margin-bottom:16px;background:var(--surface-2);border-radius:8px;padding:12px">
+        <canvas id="ticket-canvas" style="max-width:100%;border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.15)"></canvas>
+      </div>
+
+      <!-- Estado de subida -->
+      <div id="ticket-upload-status" style="font-size:12px;color:var(--text-muted);text-align:center;margin-bottom:12px;min-height:18px"></div>
+
+      <!-- Sección WhatsApp -->
       <div class="form-group">
-        <label>Número de WhatsApp del cliente</label>
-        <input type="tel" class="input" id="wa-telefono" placeholder="Ej: 11-1234-5678" autocomplete="tel">
-        <div style="font-size:11px;color:var(--text-dim);margin-top:4px">Sin el 0 ni el 15. Ej: 1134567890</div>
+        <label>Enviar por WhatsApp (opcional)</label>
+        <div style="display:flex;gap:8px">
+          <input type="tel" class="input" id="wa-telefono" placeholder="Ej: 1134567890" autocomplete="tel" style="flex:1">
+          <a id="btn-enviar-wa" href="#" target="_blank"
+             class="btn btn-primary"
+             style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;white-space:nowrap;flex-shrink:0">
+            📲 Enviar
+          </a>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px">Sin el 0 ni el 15 — sólo números</div>
       </div>
-      <div style="display:flex;gap:10px;margin-top:4px">
-        <a id="btn-enviar-wa" href="#" target="_blank"
-           class="btn btn-primary btn-full"
-           style="display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none">
-          📲 Enviar por WhatsApp
-        </a>
-        <button class="btn btn-secondary" id="btn-skip-wa">Omitir</button>
+
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-secondary" id="btn-descargar-ticket" style="flex:1">⬇ Descargar</button>
+        <button class="btn btn-secondary" id="btn-cerrar-ticket-skip" style="flex:1">Cerrar</button>
       </div>
     </div>
   </div>

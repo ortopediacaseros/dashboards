@@ -214,14 +214,15 @@ btnConfirmar.addEventListener('click', async () => {
     return;
   }
 
-  // Success — mostrar modal WhatsApp con resumen del ticket
+  // Success — mostrar modal con ticket comprobante
   const carritoSnapshot = [...carrito];
+  const medioSnapshot   = medio_pago;
   carrito = [];
   descuentoInput.value = '';
   obsEl.value = '';
   medioPagoEl.value = 'efectivo';
   renderCarrito();
-  abrirModalWA(data.numero_ticket, carritoSnapshot, total, desc);
+  abrirModalWA(data.numero_ticket, carritoSnapshot, total, desc, medioSnapshot);
 });
 
 // ── Modal nuevo producto ──
@@ -503,58 +504,254 @@ document.getElementById('btn-cancelar-ticket').addEventListener('click', async (
 
 document.getElementById('btn-refrescar-recientes').addEventListener('click', cargarVentasRecientes);
 
-// ── Modal WhatsApp ticket ─────────────────────────────────────────────────────
-const pagoIconWA = { efectivo: 'Efectivo 💵', debito: 'Débito 💳', credito: 'Crédito 🟣', transferencia: 'Transferencia 📲' };
+// ── Ticket comprobante ────────────────────────────────────────────────────────
 
-function abrirModalWA(numeroTicket, items, total, descPct) {
-  // Resumen visual en el modal
-  const lineas = items.map(i => `• ${i.nombre} x${i.cantidad} — ${formatMoney(i.subtotal)}`).join('<br>');
-  const descHtml = descPct > 0 ? `<div style="color:var(--teal)">Descuento: ${descPct}%</div>` : '';
-  document.getElementById('wa-ticket-resumen').innerHTML = `
-    <div style="font-weight:600;margin-bottom:8px">Ticket #${numeroTicket}</div>
-    <div style="color:var(--text-2)">${lineas}</div>
-    ${descHtml}
-    <div style="font-weight:700;font-size:15px;margin-top:8px;color:var(--brand)">Total: ${formatMoney(total)}</div>`;
+const NEGOCIO = {
+  nombre:    'ORTOPEDIA CASEROS',
+  domicilio: 'Av. de los Constituyentes 5690, CABA',
+  telefono:  '(011) 4768-4768',
+};
 
-  // Actualizar link WhatsApp cuando cambia el teléfono
+const SUPABASE_URL = 'https://bxcnsykkzwzrbevzquee.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4Y25zeWtrend6cmJldnpxdWVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NzMyODAsImV4cCI6MjA5MDQ0OTI4MH0.oZzblqWjjLWDqJ_CAWxXUqzsdtFMcrNFwdQ4aMCpHdE';
+
+const PAGO_LABEL = { efectivo: 'Efectivo', debito: 'Tarjeta débito', credito: 'Tarjeta crédito', transferencia: 'Transferencia' };
+
+// Dibuja el ticket en un canvas y lo devuelve
+function dibujarTicket(canvas, numeroTicket, items, total, descPct, medioPago) {
+  const W = 420;
+  const FONT = 'IBM Plex Mono, Courier New, monospace';
+
+  // Calcular altura
+  const itemsH = items.length * 46;
+  const H = 320 + itemsH;
+  canvas.width  = W;
+  canvas.height = H;
+
+  const ctx = canvas.getContext('2d');
+
+  // Fondo papel
+  ctx.fillStyle = '#FFFEF8';
+  ctx.fillRect(0, 0, W, H);
+
+  // Borde suave
+  ctx.strokeStyle = '#E8E0D0';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+
+  // ── Header ──
+  ctx.fillStyle = '#1A1A2E';
+  ctx.fillRect(0, 0, W, 72);
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 18px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.fillText(NEGOCIO.nombre, W / 2, 28);
+
+  ctx.font = `11px ${FONT}`;
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillText(NEGOCIO.domicilio, W / 2, 46);
+  ctx.fillText(`Tel: ${NEGOCIO.telefono}`, W / 2, 61);
+
+  // ── Sub-header comprobante ──
+  ctx.fillStyle = '#2D5016';
+  ctx.fillRect(0, 72, W, 28);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 11px ${FONT}`;
+  ctx.fillText('COMPROBANTE DE VENTA  —  NO VÁLIDO COMO FACTURA', W / 2, 90);
+
+  // ── Número y fecha ──
+  const fecha = new Date();
+  const fechaStr = fecha.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const horaStr  = fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#333';
+  ctx.font = `bold 13px ${FONT}`;
+  ctx.fillText(`N° ${String(numeroTicket).padStart(6, '0')}`, 20, 125);
+
+  ctx.textAlign = 'right';
+  ctx.font = `11px ${FONT}`;
+  ctx.fillStyle = '#666';
+  ctx.fillText(`${fechaStr}  ${horaStr}`, W - 20, 125);
+
+  // ── Separador ──
+  function linea(y) {
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = '#CCC';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(20, y);
+    ctx.lineTo(W - 20, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  linea(135);
+
+  // ── Encabezado items ──
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#888';
+  ctx.font = `10px ${FONT}`;
+  ctx.fillText('DESCRIPCIÓN', 20, 152);
+  ctx.textAlign = 'right';
+  ctx.fillText('CANT.', W - 100, 152);
+  ctx.fillText('IMPORTE', W - 20, 152);
+
+  // ── Items ──
+  let y = 165;
+  for (const item of items) {
+    const nombre = item.nombre.length > 30 ? item.nombre.slice(0, 28) + '…' : item.nombre;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#1A1A1A';
+    ctx.font = `12px ${FONT}`;
+    ctx.fillText(nombre, 20, y);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#444';
+    ctx.font = `11px ${FONT}`;
+    ctx.fillText(`x${item.cantidad}`, W - 100, y);
+    ctx.fillText(formatMoney(item.subtotal), W - 20, y);
+
+    if (item.cantidad > 1) {
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#999';
+      ctx.font = `10px ${FONT}`;
+      ctx.fillText(`  (${formatMoney(item.precio_unitario)} c/u)`, 20, y + 14);
+    }
+    y += 46;
+  }
+
+  linea(y + 4);
+  y += 18;
+
+  // ── Subtotal / descuento / total ──
+  const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
+  if (descPct > 0) {
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#555';
+    ctx.font = `11px ${FONT}`;
+    ctx.fillText('Subtotal:', W - 110, y);
+    ctx.fillText(formatMoney(subtotal), W - 20, y);
+    y += 18;
+
+    ctx.fillStyle = '#2D7A27';
+    ctx.fillText(`Descuento ${descPct}%:`, W - 110, y);
+    ctx.fillText(`- ${formatMoney(subtotal - total)}`, W - 20, y);
+    y += 18;
+    linea(y + 2);
+    y += 14;
+  }
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#1A1A2E';
+  ctx.font = `bold 15px ${FONT}`;
+  ctx.fillText('TOTAL:', W - 110, y);
+  ctx.fillText(formatMoney(total), W - 20, y);
+  y += 22;
+
+  ctx.fillStyle = '#666';
+  ctx.font = `11px ${FONT}`;
+  ctx.fillText(`Medio de pago: ${PAGO_LABEL[medioPago] || medioPago}`, W - 20, y);
+  y += 24;
+
+  linea(y);
+  y += 18;
+
+  // ── Footer ──
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#999';
+  ctx.font = `10px ${FONT}`;
+  ctx.fillText('¡Gracias por su compra!', W / 2, y);
+  ctx.fillText('ortopediacaseros.com', W / 2, y + 14);
+}
+
+// Sube el canvas como PNG a Supabase Storage y devuelve la URL pública
+async function subirTicket(canvas, numeroTicket) {
+  const statusEl = document.getElementById('ticket-upload-status');
+  statusEl.textContent = 'Subiendo comprobante…';
+
+  return new Promise((resolve) => {
+    canvas.toBlob(async (blob) => {
+      const filename = `ticket-${String(numeroTicket).padStart(6,'0')}-${Date.now()}.png`;
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || SUPABASE_ANON;
+
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/tickets/${filename}`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'image/png',
+          'x-upsert': 'true',
+        },
+        body: blob,
+      });
+
+      if (res.ok) {
+        const url = `${SUPABASE_URL}/storage/v1/object/public/tickets/${filename}`;
+        statusEl.textContent = '✅ Comprobante listo para compartir';
+        resolve(url);
+      } else {
+        statusEl.textContent = 'Comprobante generado (sin subir)';
+        resolve(null);
+      }
+    }, 'image/png');
+  });
+}
+
+async function abrirModalWA(numeroTicket, items, total, descPct, medioPago) {
+  const canvas = document.getElementById('ticket-canvas');
+  dibujarTicket(canvas, numeroTicket, items, total, descPct, medioPago);
+
+  // Resetear estado
+  document.getElementById('wa-telefono').value = '';
+  document.getElementById('btn-enviar-wa').href = '#';
+  document.getElementById('ticket-upload-status').textContent = '';
+  document.getElementById('modal-ticket').classList.remove('hidden');
+
+  showToast(`¡Venta #${numeroTicket} registrada! ${formatMoney(total)}`, 'success', 3000);
+  cargarVentasRecientes();
+
+  // Subir en segundo plano
+  const publicUrl = await subirTicket(canvas, numeroTicket);
+
+  // Descargar
+  document.getElementById('btn-descargar-ticket').onclick = () => {
+    const a = document.createElement('a');
+    a.download = `ticket-${String(numeroTicket).padStart(6,'0')}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  };
+
+  // WhatsApp: actualizar link al escribir número
   const telInput = document.getElementById('wa-telefono');
-  const btnWA = document.getElementById('btn-enviar-wa');
-  telInput.value = '';
+  const btnWA    = document.getElementById('btn-enviar-wa');
 
-  function actualizarLink() {
+  function actualizarWA() {
     const tel = telInput.value.replace(/\D/g, '');
     if (!tel) { btnWA.href = '#'; return; }
     const num = tel.startsWith('54') ? tel : '54' + tel;
-    const msg = armarMensaje(numeroTicket, items, total, descPct);
+    const msg = publicUrl
+      ? `🦴 *${NEGOCIO.nombre}*\nTe comparto tu comprobante de compra N° ${String(numeroTicket).padStart(6,'0')}:\n\n${publicUrl}\n\n*Total: ${formatMoney(total)}*\n¡Gracias por tu compra!`
+      : `🦴 *${NEGOCIO.nombre}*\nComprobante N° ${String(numeroTicket).padStart(6,'0')} — *Total: ${formatMoney(total)}*\n¡Gracias por tu compra!`;
     btnWA.href = `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
   }
 
-  telInput.removeEventListener('input', telInput._waHandler);
-  telInput._waHandler = actualizarLink;
-  telInput.addEventListener('input', actualizarLink);
-
-  document.getElementById('modal-wa-ticket').classList.remove('hidden');
-  setTimeout(() => telInput.focus(), 100);
-
-  cargarVentasRecientes();
-  showToast(`¡Venta #${numeroTicket} registrada! ${formatMoney(total)}`, 'success', 3000);
+  telInput.removeEventListener('input', telInput._waH);
+  telInput._waH = actualizarWA;
+  telInput.addEventListener('input', actualizarWA);
+  setTimeout(() => telInput.focus(), 200);
 }
 
-function armarMensaje(numeroTicket, items, total, descPct) {
-  const lineas = items.map(i => `  • ${i.nombre} x${i.cantidad}  ${formatMoney(i.subtotal)}`).join('\n');
-  const descLinea = descPct > 0 ? `\n  🏷 Descuento: ${descPct}%` : '';
-  return `🦴 *Ortopedia Caseros*\nTicket #${numeroTicket}\n\n${lineas}${descLinea}\n\n*Total: ${formatMoney(total)}*\n\n¡Gracias por tu compra! 😊`;
+function cerrarModalTicket() {
+  document.getElementById('modal-ticket').classList.add('hidden');
 }
 
-document.getElementById('btn-cerrar-wa').addEventListener('click', () => {
-  document.getElementById('modal-wa-ticket').classList.add('hidden');
-});
-document.getElementById('btn-skip-wa').addEventListener('click', () => {
-  document.getElementById('modal-wa-ticket').classList.add('hidden');
-});
-document.getElementById('modal-wa-ticket').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal-wa-ticket'))
-    document.getElementById('modal-wa-ticket').classList.add('hidden');
+document.getElementById('btn-cerrar-ticket-modal').addEventListener('click', cerrarModalTicket);
+document.getElementById('btn-cerrar-ticket-skip').addEventListener('click', cerrarModalTicket);
+document.getElementById('modal-ticket').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-ticket')) cerrarModalTicket();
 });
 
 // Cargar al inicio (después de init)
