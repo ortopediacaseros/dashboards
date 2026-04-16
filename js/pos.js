@@ -312,11 +312,13 @@ async function cargarVentasRecientes() {
         </span>
         <span style="margin-left:8px">${pagoLabel[v.medio_pago] || ''}</span>
       </div>
-      <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
         <span style="font-family:'Syne',sans-serif;font-weight:700">${formatMoney(v.total)}</span>
         ${v.ticket_url ? `<a href="${v.ticket_url}" target="_blank" class="btn btn-ghost" style="padding:4px 8px;font-size:12px" title="Ver comprobante">🖼</a>` : ''}
         <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px"
-          onclick="window.abrirEditTicket('${v.id}')">✏️ Editar</button>
+          onclick="window.abrirEditTicket('${v.id}')">✏️</button>
+        <button class="btn btn-danger" style="padding:4px 8px;font-size:12px"
+          onclick="window.borrarTicket('${v.id}','${v.numero_ticket}')">🗑</button>
       </div>
     </div>`).join('');
 }
@@ -519,6 +521,15 @@ document.getElementById('btn-eliminar-ticket').addEventListener('click', async (
 
 document.getElementById('btn-refrescar-recientes').addEventListener('click', cargarVentasRecientes);
 
+window.borrarTicket = async (id, nro) => {
+  if (!confirm(`¿Borrar el ticket #${nro}? No se restaurará el stock.`)) return;
+  await supabase.from('items_venta').delete().eq('venta_id', id);
+  const { error } = await supabase.from('ventas').delete().eq('id', id);
+  if (error) { showToast('Error al borrar: ' + error.message, 'error'); return; }
+  showToast(`Ticket #${nro} eliminado`, 'success');
+  cargarVentasRecientes();
+};
+
 // ── Ticket comprobante ────────────────────────────────────────────────────────
 
 const NEGOCIO = {
@@ -684,9 +695,20 @@ function dibujarTicket(canvas, numeroTicket, items, total, descPct, medioPago) {
 // Acorta URL via Edge Function (evita CORS del browser)
 async function acortarUrl(url) {
   try {
-    const { data } = await supabase.functions.invoke('shorten-url', { body: { url } });
-    if (data?.url?.startsWith('https://is.gd/')) return data.url;
-  } catch { /* fallback */ }
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/shorten-url`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON,
+        'Authorization': `Bearer ${SUPABASE_ANON}`,
+      },
+      body: JSON.stringify({ url }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json?.url?.startsWith('https://is.gd/')) return json.url;
+    }
+  } catch { /* fallback a URL original */ }
   return url;
 }
 
