@@ -508,8 +508,8 @@ document.getElementById('btn-refrescar-recientes').addEventListener('click', car
 
 const NEGOCIO = {
   nombre:    'ORTOPEDIA CASEROS',
-  domicilio: 'Av. de los Constituyentes 5690, CABA',
-  telefono:  '(011) 4768-4768',
+  domicilio: 'Valentín Gómez 4784 — Caseros',
+  telefono:  '+54 11 3578-9985',
 };
 
 const SUPABASE_URL = 'https://bxcnsykkzwzrbevzquee.supabase.co';

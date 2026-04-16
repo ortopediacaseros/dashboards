@@ -153,7 +153,7 @@ window.abrirDetalle = (id) => {
         const tel = a.cliente_telefono.replace(/\D/g, '');
         const num = tel.startsWith('0') ? '54' + tel.slice(1) : tel.startsWith('54') ? tel : '54' + tel;
         const vence = formatDate(a.fecha_fin_prevista);
-        const msg = encodeURIComponent(`Hola ${a.cliente_nombre}! Te recordamos que el alquiler de *${producto}* vence el *${vence}*. Cualquier consulta estamos a disposición. Ortopedia Caseros 🦴`);
+        const msg = encodeURIComponent(`Hola ${a.cliente_nombre}! Te recordamos que el alquiler de *${producto}* vence el *${vence}*. Cualquier consulta estamos a disposición.\n\n🦴 *Ortopedia Caseros*\nValentín Gómez 4784, Caseros\n+54 11 3578-9985`);
         return `https://wa.me/${num}?text=${msg}`;
       })()
     : null;

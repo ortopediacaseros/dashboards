@@ -151,7 +151,7 @@ window.abrirDetallePlt = (id) => {
         const tel = p.cliente_telefono.replace(/\D/g, '');
         const num = tel.startsWith('0') ? '54' + tel.slice(1) : tel.startsWith('54') ? tel : '54' + tel;
         const nOrden = p.nro_orden ? ` (N° ${p.nro_orden})` : '';
-        const msg = encodeURIComponent(`Hola ${p.cliente_nombre}! Te avisamos que tus plantillas${nOrden} ya están listas para retirar. Pasá cuando quieras por el local. Ortopedia Caseros 🦴`);
+        const msg = encodeURIComponent(`Hola ${p.cliente_nombre}! Te avisamos que tus plantillas${nOrden} ya están listas para retirar. Pasá cuando quieras por el local.\n\n🦴 *Ortopedia Caseros*\nValentín Gómez 4784, Caseros\n+54 11 3578-9985`);
         return `https://wa.me/${num}?text=${msg}`;
       })()
     : null;
