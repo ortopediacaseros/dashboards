@@ -241,11 +241,22 @@ function renderTabla() {
     const maxStock = Math.max(p.stock_actual, 10, 1);
     const fillPct = Math.min(100, Math.round((p.stock_actual / maxStock) * 100));
 
+    const imgHtml = p.imagen_url
+      ? `<img src="${p.imagen_url}" alt="" loading="lazy"
+           style="width:40px;height:40px;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);flex-shrink:0;cursor:pointer"
+           onclick="window.verImagenProducto('${p.imagen_url}','${p.nombre.replace(/'/g,"\\'")}')">`
+      : `<div style="width:40px;height:40px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text-dim)">📦</div>`;
+
     return `
       <tr>
         <td>
-          <div style="font-weight:500">${p.nombre}</div>
-          <div style="font-size:11px;color:var(--text-dim)">${p.categoria}</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            ${imgHtml}
+            <div>
+              <div style="font-weight:500">${p.nombre}</div>
+              <div style="font-size:11px;color:var(--text-dim)">${p.categoria}</div>
+            </div>
+          </div>
         </td>
         <td style="font-size:12px;color:var(--text-muted)">${p.sku}</td>
         <td style="font-size:12px;color:var(--text-dim)">${p.ean || '—'}</td>
@@ -283,6 +294,18 @@ document.getElementById('busqueda').addEventListener('input', e => {
 // MODALES MANUALES (Editar, Ajustar, Nuevo)
 // ══════════════════════════════════════════════════════════
 
+window.verImagenProducto = (url, nombre) => {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:24px';
+  overlay.innerHTML = `
+    <div style="max-width:480px;max-height:80vh;text-align:center">
+      <img src="${url}" alt="${nombre}" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5)">
+      <div style="color:white;font-size:13px;margin-top:12px;opacity:.8">${nombre}</div>
+    </div>`;
+  overlay.addEventListener('click', () => overlay.remove());
+  document.body.appendChild(overlay);
+};
+
 window.editarProducto = (id) => {
   const p = todosProductos.find(x => x.id === id);
   if (!p) return;
@@ -294,6 +317,17 @@ window.editarProducto = (id) => {
   document.getElementById('edit-ean').value = p.ean || '';
   document.getElementById('edit-precio-venta').value = p.precio_venta;
   document.getElementById('edit-precio-costo').value = p.precio_costo;
+
+  // Mostrar imagen actual si existe
+  const imgWrap = document.getElementById('edit-imagen-preview');
+  if (imgWrap) {
+    imgWrap.innerHTML = p.imagen_url
+      ? `<img src="${p.imagen_url}" alt="${p.nombre}"
+           style="width:80px;height:80px;object-fit:contain;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer"
+           onclick="window.verImagenProducto('${p.imagen_url}','${p.nombre.replace(/'/g,"\\'")}')">
+         <span style="font-size:11px;color:var(--text-muted)">Imagen del proveedor</span>`
+      : `<span style="font-size:12px;color:var(--text-dim)">Sin imagen cargada</span>`;
+  }
 };
 
 document.getElementById('btn-cerrar-editar').addEventListener('click', () => document.getElementById('modal-editar').classList.add('hidden'));

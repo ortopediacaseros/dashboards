@@ -96,6 +96,7 @@
               <tr>
                 <th style="width:40px;text-align:center">#</th>
                 <th>Cliente</th>
+                <th>N° Orden</th>
                 <th>Pie</th>
                 <th>Tipo / Talle</th>
                 <th>Proveedor</th>
@@ -107,7 +108,7 @@
               </tr>
             </thead>
             <tbody id="plt-tbody">
-              <tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:32px">Cargando…</td></tr>
+              <tr><td colspan="11" style="text-align:center;color:var(--text-dim);padding:32px">Cargando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -143,6 +144,16 @@
         </div>
         <div class="form-row">
           <div class="form-group">
+            <label>N° de orden / Remito</label>
+            <input type="text" class="input" name="nro_orden" placeholder="Ej: 00123, R-456…">
+          </div>
+          <div class="form-group">
+            <label>Proveedor / Taller</label>
+            <input type="text" class="input" name="proveedor" placeholder="Ej: Ortotaller Norte">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
             <label>Pie</label>
             <select class="select" name="pie">
               <option value="ambos">Ambos</option>
@@ -159,10 +170,6 @@
           <div class="form-group">
             <label>Talle</label>
             <input type="text" class="input" name="talle" placeholder="Ej: 38, 42-43, M…">
-          </div>
-          <div class="form-group">
-            <label>Proveedor / Taller</label>
-            <input type="text" class="input" name="proveedor" placeholder="Ej: Ortotaller Norte">
           </div>
         </div>
         <div class="form-row">

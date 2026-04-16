@@ -80,14 +80,15 @@ function renderTabla() {
     lista = lista.filter(p =>
       p.cliente_nombre?.toLowerCase().includes(q) ||
       p.proveedor?.toLowerCase().includes(q) ||
-      p.tipo?.toLowerCase().includes(q)
+      p.tipo?.toLowerCase().includes(q) ||
+      p.nro_orden?.toLowerCase().includes(q)
     );
   }
 
   const tbody = document.getElementById('plt-tbody');
 
   if (lista.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:32px">Sin pedidos</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--text-dim);padding:32px">Sin pedidos</td></tr>`;
     return;
   }
 
@@ -113,6 +114,7 @@ function renderTabla() {
           <div style="font-weight:500">${p.cliente_nombre}</div>
           <div style="font-size:11px;color:var(--text-dim)">${p.cliente_telefono || ''}</div>
         </td>
+        <td style="font-size:12px;color:var(--brand);font-weight:600">${p.nro_orden || '—'}</td>
         <td style="font-size:12px;text-transform:capitalize">${p.pie || '—'}</td>
         <td>
           <div style="font-size:12px">${p.tipo || '—'}</div>
@@ -144,10 +146,21 @@ window.abrirDetallePlt = (id) => {
   const est = ESTADOS[p.estado] || ESTADOS.relevado;
   document.getElementById('detalle-plt-titulo').textContent = `${est.icon} ${p.cliente_nombre}`;
 
+  const waLink = p.cliente_telefono
+    ? (() => {
+        const tel = p.cliente_telefono.replace(/\D/g, '');
+        const num = tel.startsWith('0') ? '54' + tel.slice(1) : tel.startsWith('54') ? tel : '54' + tel;
+        const nOrden = p.nro_orden ? ` (N° ${p.nro_orden})` : '';
+        const msg = encodeURIComponent(`Hola ${p.cliente_nombre}! Te avisamos que tus plantillas${nOrden} ya están listas para retirar. Pasá cuando quieras por el local. Ortopedia Caseros 🦴`);
+        return `https://wa.me/${num}?text=${msg}`;
+      })()
+    : null;
+
   document.getElementById('detalle-plt-content').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
       <div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">CLIENTE</div><strong>${p.cliente_nombre}</strong></div>
       <div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">TELÉFONO</div>${p.cliente_telefono || '—'}</div>
+      ${p.nro_orden ? `<div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">N° ORDEN</div><strong style="color:var(--brand)">${p.nro_orden}</strong></div><div></div>` : ''}
       <div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">PIE</div><span style="text-transform:capitalize">${p.pie || '—'}</span></div>
       <div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">TIPO / TALLE</div>${p.tipo || '—'}${p.talle ? ' · T.' + p.talle : ''}</div>
       <div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">PROVEEDOR</div>${p.proveedor || '—'}</div>
@@ -162,9 +175,12 @@ window.abrirDetallePlt = (id) => {
 
   // Botones de transición de estado
   const transiciones = TRANSICIONES[p.estado] || [];
-  document.getElementById('detalle-plt-estados').innerHTML = transiciones.map(t =>
-    `<button class="btn btn-primary" onclick="window.cambiarEstadoPlt('${p.id}','${t.estado}')">${t.label}</button>`
-  ).join('');
+  document.getElementById('detalle-plt-estados').innerHTML = [
+    ...transiciones.map(t =>
+      `<button class="btn btn-primary" onclick="window.cambiarEstadoPlt('${p.id}','${t.estado}')">${t.label}</button>`
+    ),
+    waLink ? `<a href="${waLink}" target="_blank" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">📲 WhatsApp</a>` : '',
+  ].filter(Boolean).join('');
 
   // Borrar
   document.getElementById('btn-borrar-plt').onclick = () => window.borrarPlt(p.id);
@@ -233,6 +249,7 @@ function bindEvents() {
     const pedido = {
       cliente_nombre:         fd.get('cliente_nombre'),
       cliente_telefono:       fd.get('cliente_telefono') || null,
+      nro_orden:              fd.get('nro_orden') || null,
       pie:                    fd.get('pie'),
       tipo:                   fd.get('tipo') || null,
       talle:                  fd.get('talle') || null,

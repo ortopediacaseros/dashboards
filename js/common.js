@@ -235,7 +235,7 @@ function injectSidebarSearch() {
 async function runSearch(q, resultsEl) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return;
-  const { data } = await supabase.from('productos').select('nombre,sku,precio_venta,stock_actual,categoria')
+  const { data } = await supabase.from('productos').select('nombre,sku,precio_venta,stock_actual,categoria,imagen_url')
     .eq('activo', true).or(`nombre.ilike.%${q}%,sku.ilike.%${q}%`).order('nombre').limit(10);
   if (!data || !data.length) {
     resultsEl.innerHTML = '<div style="padding:12px 16px;font-size:12px;color:var(--text-3)">Sin resultados</div>';
@@ -245,8 +245,12 @@ async function runSearch(q, resultsEl) {
   resultsEl.style.display = 'block';
   resultsEl.innerHTML = data.map(p => {
     const dot = p.stock_actual === 1 ? 'stock-crit' : p.stock_actual <= 5 ? 'stock-warn' : 'stock-ok';
+    const img = p.imagen_url
+      ? `<img src="${p.imagen_url}" alt="" loading="lazy" style="width:36px;height:36px;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);flex-shrink:0">`
+      : `<div style="width:36px;height:36px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px">📦</div>`;
     return `<div class="sidebar-result-item">
-      <div style="min-width:0">
+      ${img}
+      <div style="min-width:0;flex:1">
         <div style="font-weight:500;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.nombre}</div>
         <div class="mono">${p.categoria}</div>
       </div>

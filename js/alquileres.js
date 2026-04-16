@@ -148,6 +148,16 @@ window.abrirDetalle = (id) => {
   const producto = a.productos?.nombre || a.producto_nombre || '—';
   const fuenteLabel = a.fuente_stock === 'nuevo' ? '📦 Stock nuevo' : '🔄 Pool alquiler';
 
+  const waLink = a.cliente_telefono
+    ? (() => {
+        const tel = a.cliente_telefono.replace(/\D/g, '');
+        const num = tel.startsWith('0') ? '54' + tel.slice(1) : tel.startsWith('54') ? tel : '54' + tel;
+        const vence = formatDate(a.fecha_fin_prevista);
+        const msg = encodeURIComponent(`Hola ${a.cliente_nombre}! Te recordamos que el alquiler de *${producto}* vence el *${vence}*. Cualquier consulta estamos a disposición. Ortopedia Caseros 🦴`);
+        return `https://wa.me/${num}?text=${msg}`;
+      })()
+    : null;
+
   content.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
       <div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">CLIENTE</div><strong>${a.cliente_nombre}</strong></div>
@@ -164,8 +174,10 @@ window.abrirDetalle = (id) => {
 
   actions.innerHTML = a.estado !== 'devuelto'
     ? `<button class="btn btn-primary btn-full" onclick="window.marcarDevuelto('${a.id}');document.getElementById('modal-detalle-alq').classList.add('hidden')">✅ Marcar como devuelto</button>
+       ${waLink ? `<a href="${waLink}" target="_blank" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">📲 WhatsApp</a>` : ''}
        <button class="btn btn-danger" onclick="window.borrarAlquiler('${a.id}');document.getElementById('modal-detalle-alq').classList.add('hidden')">🗑 Borrar</button>`
-    : `<button class="btn btn-danger btn-full" onclick="window.borrarAlquiler('${a.id}');document.getElementById('modal-detalle-alq').classList.add('hidden')">🗑 Borrar alquiler</button>`;
+    : `${waLink ? `<a href="${waLink}" target="_blank" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">📲 WhatsApp</a>` : ''}
+       <button class="btn btn-danger" onclick="window.borrarAlquiler('${a.id}');document.getElementById('modal-detalle-alq').classList.add('hidden')">🗑 Borrar alquiler</button>`;
 
   document.getElementById('modal-detalle-alq').classList.remove('hidden');
 };
