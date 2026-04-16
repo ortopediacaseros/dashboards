@@ -214,13 +214,14 @@ btnConfirmar.addEventListener('click', async () => {
     return;
   }
 
-  // Success
-  showToast(`¡Venta #${data.numero_ticket} registrada! ${formatMoney(total)}`, 'success', 4000);
+  // Success — mostrar modal WhatsApp con resumen del ticket
+  const carritoSnapshot = [...carrito];
   carrito = [];
   descuentoInput.value = '';
   obsEl.value = '';
   medioPagoEl.value = 'efectivo';
   renderCarrito();
+  abrirModalWA(data.numero_ticket, carritoSnapshot, total, desc);
 });
 
 // ── Modal nuevo producto ──
@@ -501,6 +502,60 @@ document.getElementById('btn-cancelar-ticket').addEventListener('click', async (
 });
 
 document.getElementById('btn-refrescar-recientes').addEventListener('click', cargarVentasRecientes);
+
+// ── Modal WhatsApp ticket ─────────────────────────────────────────────────────
+const pagoIconWA = { efectivo: 'Efectivo 💵', debito: 'Débito 💳', credito: 'Crédito 🟣', transferencia: 'Transferencia 📲' };
+
+function abrirModalWA(numeroTicket, items, total, descPct) {
+  // Resumen visual en el modal
+  const lineas = items.map(i => `• ${i.nombre} x${i.cantidad} — ${formatMoney(i.subtotal)}`).join('<br>');
+  const descHtml = descPct > 0 ? `<div style="color:var(--teal)">Descuento: ${descPct}%</div>` : '';
+  document.getElementById('wa-ticket-resumen').innerHTML = `
+    <div style="font-weight:600;margin-bottom:8px">Ticket #${numeroTicket}</div>
+    <div style="color:var(--text-2)">${lineas}</div>
+    ${descHtml}
+    <div style="font-weight:700;font-size:15px;margin-top:8px;color:var(--brand)">Total: ${formatMoney(total)}</div>`;
+
+  // Actualizar link WhatsApp cuando cambia el teléfono
+  const telInput = document.getElementById('wa-telefono');
+  const btnWA = document.getElementById('btn-enviar-wa');
+  telInput.value = '';
+
+  function actualizarLink() {
+    const tel = telInput.value.replace(/\D/g, '');
+    if (!tel) { btnWA.href = '#'; return; }
+    const num = tel.startsWith('54') ? tel : '54' + tel;
+    const msg = armarMensaje(numeroTicket, items, total, descPct);
+    btnWA.href = `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+  }
+
+  telInput.removeEventListener('input', telInput._waHandler);
+  telInput._waHandler = actualizarLink;
+  telInput.addEventListener('input', actualizarLink);
+
+  document.getElementById('modal-wa-ticket').classList.remove('hidden');
+  setTimeout(() => telInput.focus(), 100);
+
+  cargarVentasRecientes();
+  showToast(`¡Venta #${numeroTicket} registrada! ${formatMoney(total)}`, 'success', 3000);
+}
+
+function armarMensaje(numeroTicket, items, total, descPct) {
+  const lineas = items.map(i => `  • ${i.nombre} x${i.cantidad}  ${formatMoney(i.subtotal)}`).join('\n');
+  const descLinea = descPct > 0 ? `\n  🏷 Descuento: ${descPct}%` : '';
+  return `🦴 *Ortopedia Caseros*\nTicket #${numeroTicket}\n\n${lineas}${descLinea}\n\n*Total: ${formatMoney(total)}*\n\n¡Gracias por tu compra! 😊`;
+}
+
+document.getElementById('btn-cerrar-wa').addEventListener('click', () => {
+  document.getElementById('modal-wa-ticket').classList.add('hidden');
+});
+document.getElementById('btn-skip-wa').addEventListener('click', () => {
+  document.getElementById('modal-wa-ticket').classList.add('hidden');
+});
+document.getElementById('modal-wa-ticket').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-wa-ticket'))
+    document.getElementById('modal-wa-ticket').classList.add('hidden');
+});
 
 // Cargar al inicio (después de init)
 setTimeout(cargarVentasRecientes, 500);

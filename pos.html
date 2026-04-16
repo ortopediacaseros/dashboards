@@ -437,6 +437,30 @@
     });
   </script>
 
+  <!-- Modal WhatsApp ticket -->
+  <div class="modal-overlay hidden" id="modal-wa-ticket">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header">
+        <span class="modal-title">📲 Compartir ticket</span>
+        <button class="modal-close" id="btn-cerrar-wa">✕</button>
+      </div>
+      <div id="wa-ticket-resumen" style="background:var(--surface-2);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.6"></div>
+      <div class="form-group">
+        <label>Número de WhatsApp del cliente</label>
+        <input type="tel" class="input" id="wa-telefono" placeholder="Ej: 11-1234-5678" autocomplete="tel">
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px">Sin el 0 ni el 15. Ej: 1134567890</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <a id="btn-enviar-wa" href="#" target="_blank"
+           class="btn btn-primary btn-full"
+           style="display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none">
+          📲 Enviar por WhatsApp
+        </a>
+        <button class="btn btn-secondary" id="btn-skip-wa">Omitir</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="js/common.js"></script>
   <script type="module" src="js/theme.js"></script>
   <script type="module" src="js/pos.js"></script>
