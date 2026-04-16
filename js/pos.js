@@ -502,6 +502,20 @@ document.getElementById('btn-cancelar-ticket').addEventListener('click', async (
   cargarVentasRecientes();
 });
 
+// Borrar ticket sin restaurar stock
+document.getElementById('btn-eliminar-ticket').addEventListener('click', async () => {
+  if (!ticketEditando) return;
+  if (!confirm(`¿Borrar el ticket #${ticketEditando.numero_ticket}? No se restaurará el stock.`)) return;
+
+  await supabase.from('items_venta').delete().eq('venta_id', ticketEditando.id);
+  const { error } = await supabase.from('ventas').delete().eq('id', ticketEditando.id);
+
+  if (error) { showToast('Error al borrar: ' + error.message, 'error'); return; }
+  showToast(`Ticket #${ticketEditando.numero_ticket} eliminado`, 'success');
+  document.getElementById('modal-editar-ticket').classList.add('hidden');
+  cargarVentasRecientes();
+});
+
 document.getElementById('btn-refrescar-recientes').addEventListener('click', cargarVentasRecientes);
 
 // ── Ticket comprobante ────────────────────────────────────────────────────────
@@ -666,13 +680,13 @@ function dibujarTicket(canvas, numeroTicket, items, total, descPct, medioPago) {
   ctx.fillText('ortopediacaseros.com', W / 2, y + 14);
 }
 
-// Acorta una URL via is.gd (gratis, sin API key, CORS ok)
+// Acorta una URL via TinyURL
 async function acortarUrl(url) {
   try {
-    const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`);
+    const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`);
     if (res.ok) {
       const short = (await res.text()).trim();
-      if (short.startsWith('https://is.gd/')) return short;
+      if (short.startsWith('https://tinyurl.com/')) return short;
     }
   } catch { /* fallback a URL original */ }
   return url;
