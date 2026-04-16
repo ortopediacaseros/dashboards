@@ -320,11 +320,20 @@ async function guardarEdicion(v, items, subtotal) {
   renderDetalle({ ...v, medio_pago: medio, descuento_pct, observaciones, total }, items);
 }
 
+async function restaurarStock(ventaId) {
+  const { data: items } = await supabase
+    .from('items_venta').select('producto_id, cantidad').eq('venta_id', ventaId);
+  for (const item of (items || [])) {
+    await supabase.rpc('descontar_stock', { p_producto_id: item.producto_id, p_cantidad: -item.cantidad });
+  }
+}
+
 async function anularVenta(id) {
-  if (!confirm('¿Anular este ticket? Esta acción no se puede deshacer.')) return;
+  if (!confirm('¿Anular este ticket? Se devolverá el stock.')) return;
+  await restaurarStock(id);
   const { error } = await supabase.from('ventas').update({ estado: 'anulada' }).eq('id', id);
   if (error) { showToast('Error al anular: ' + error.message, 'error'); return; }
-  showToast('Ticket anulado', 'success');
+  showToast('Ticket anulado y stock restaurado', 'success');
   overlay.classList.add('hidden');
   await cargarVentas();
 }
@@ -352,11 +361,12 @@ function exportarCSV() {
 }
 
 async function borrarVenta(id, nro) {
-  if (!confirm(`¿Borrar el ticket #${nro}? No se restaurará el stock.`)) return;
+  if (!confirm(`¿Borrar el ticket #${nro}? Se devolverá el stock.`)) return;
+  await restaurarStock(id);
   await supabase.from('items_venta').delete().eq('venta_id', id);
   const { error } = await supabase.from('ventas').delete().eq('id', id);
   if (error) { showToast('Error al borrar: ' + error.message, 'error'); return; }
-  showToast(`Ticket #${nro} eliminado`, 'success');
+  showToast(`Ticket #${nro} eliminado y stock restaurado`, 'success');
   overlay.classList.add('hidden');
   await cargarVentas();
 }
