@@ -560,6 +560,7 @@ tbody td { padding: 11px 14px; color: var(--text); vertical-align: middle; }
 .stk-bar { width: 64px; height: 5px; background: #E5E7EB; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
 html.dark .stk-bar { background: var(--border-strong); }
 .stk-fill { height: 100%; border-radius: 3px; }
+.stk-fill.zero { background: var(--red); opacity: 0.35; width: 100%; }
 .stk-fill.crit { background: var(--red); }
 .stk-fill.warn { background: var(--amber); }
 .stk-fill.ok   { background: var(--green); }
@@ -733,6 +734,8 @@ html.dark .progress-bar { background: var(--border-strong); }
 .stock-ok::before   { content: '●'; color: var(--green); margin-right: 5px; }
 .stock-warn::before { content: '●'; color: var(--amber); margin-right: 5px; }
 .stock-crit::before { content: '●'; color: var(--red);   margin-right: 5px; }
+.stock-zero         { color: var(--red); text-decoration: line-through; opacity: 0.75; }
+.stock-zero::before { content: '●'; color: var(--red); margin-right: 5px; }
 
 /* ── Sidebar search ── */
 .sidebar-search-wrap {

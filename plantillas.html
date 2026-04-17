@@ -212,8 +212,87 @@
       <div id="detalle-plt-content"></div>
       <div id="detalle-plt-estados" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px"></div>
       <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn btn-secondary" id="btn-editar-plt">✏️ Editar</button>
         <button class="btn btn-danger" id="btn-borrar-plt" style="margin-left:auto">🗑 Borrar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal editar plantilla -->
+  <div class="modal-overlay hidden" id="modal-editar-plt">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Editar pedido</span>
+        <button class="modal-close" id="btn-cerrar-editar-plt">✕</button>
+      </div>
+      <form id="form-editar-plt">
+        <input type="hidden" id="edit-plt-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nombre del cliente *</label>
+            <input type="text" class="input" id="edit-plt-nombre" required>
+          </div>
+          <div class="form-group">
+            <label>Teléfono</label>
+            <input type="tel" class="input" id="edit-plt-telefono">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>N° de orden / Remito</label>
+            <input type="text" class="input" id="edit-plt-orden">
+          </div>
+          <div class="form-group">
+            <label>Proveedor / Taller</label>
+            <input type="text" class="input" id="edit-plt-proveedor">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Pie</label>
+            <select class="select" id="edit-plt-pie">
+              <option value="ambos">Ambos</option>
+              <option value="izquierdo">Izquierdo</option>
+              <option value="derecho">Derecho</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tipo de plantilla</label>
+            <input type="text" class="input" id="edit-plt-tipo">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Talle</label>
+            <input type="text" class="input" id="edit-plt-talle">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Precio ($)</label>
+            <input type="number" class="input" id="edit-plt-precio" min="0" step="100">
+          </div>
+          <div class="form-group">
+            <label>Seña ($)</label>
+            <input type="number" class="input" id="edit-plt-sena" min="0" step="100">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Fecha del pedido</label>
+            <input type="date" class="input" id="edit-plt-fecha-pedido">
+          </div>
+          <div class="form-group">
+            <label>Entrega prevista</label>
+            <input type="date" class="input" id="edit-plt-fecha-entrega">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notas / Medidas</label>
+          <textarea class="input" id="edit-plt-notas" rows="3" style="resize:vertical"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Guardar cambios</button>
+      </form>
     </div>
   </div>
 

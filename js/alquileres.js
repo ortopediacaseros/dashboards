@@ -200,8 +200,10 @@ window.abrirDetalle = (id) => {
   actions.innerHTML = a.estado !== 'devuelto'
     ? `<button class="btn btn-primary btn-full" onclick="window.marcarDevuelto('${a.id}');document.getElementById('modal-detalle-alq').classList.add('hidden')">✅ Marcar como devuelto</button>
        ${waLink ? `<a href="${waLink}" target="_blank" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">📲 WhatsApp</a>` : ''}
+       <button class="btn btn-secondary" onclick="window.abrirEditarAlq('${a.id}')">✏️ Editar</button>
        <button class="btn btn-danger" onclick="window.borrarAlquiler('${a.id}');document.getElementById('modal-detalle-alq').classList.add('hidden')">🗑 Borrar</button>`
     : `${waLink ? `<a href="${waLink}" target="_blank" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">📲 WhatsApp</a>` : ''}
+       <button class="btn btn-secondary" onclick="window.abrirEditarAlq('${a.id}')">✏️ Editar</button>
        <button class="btn btn-danger" onclick="window.borrarAlquiler('${a.id}');document.getElementById('modal-detalle-alq').classList.add('hidden')">🗑 Borrar alquiler</button>`;
 
   document.getElementById('modal-detalle-alq').classList.remove('hidden');
@@ -435,5 +437,49 @@ window.cambiarFuenteAlq = (productoId, stockAlq, stockNuevo, nuevaFuente) => {
   document.getElementById('alq-fuente-stock').value = nuevaFuente;
   renderFuenteIndicator(productoId, stockAlq, stockNuevo, nuevaFuente);
 };
+
+// ── Editar alquiler ───────────────────────────────────────────────────────────
+window.abrirEditarAlq = (id) => {
+  const a = todosAlquileres.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('modal-detalle-alq').classList.add('hidden');
+  document.getElementById('edit-alq-id').value = a.id;
+  document.getElementById('edit-alq-nombre').value = a.cliente_nombre || '';
+  document.getElementById('edit-alq-telefono').value = a.cliente_telefono || '';
+  document.getElementById('edit-alq-fecha-inicio').value = a.fecha_inicio || '';
+  document.getElementById('edit-alq-fecha-fin').value = a.fecha_fin_prevista || '';
+  document.getElementById('edit-alq-deposito').value = a.deposito || 0;
+  document.getElementById('edit-alq-precio-dia').value = a.precio_por_dia || 0;
+  document.getElementById('edit-alq-notas').value = a.notas || '';
+  document.getElementById('modal-editar-alq').classList.remove('hidden');
+};
+
+document.getElementById('btn-cerrar-editar-alq').addEventListener('click', () => {
+  document.getElementById('modal-editar-alq').classList.add('hidden');
+});
+document.getElementById('modal-editar-alq').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-editar-alq')) document.getElementById('modal-editar-alq').classList.add('hidden');
+});
+document.getElementById('form-editar-alq').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('edit-alq-id').value;
+  const updates = {
+    cliente_nombre:     document.getElementById('edit-alq-nombre').value,
+    cliente_telefono:   document.getElementById('edit-alq-telefono').value || null,
+    fecha_inicio:       document.getElementById('edit-alq-fecha-inicio').value || null,
+    fecha_fin_prevista: document.getElementById('edit-alq-fecha-fin').value || null,
+    deposito:           parseFloat(document.getElementById('edit-alq-deposito').value) || 0,
+    precio_por_dia:     parseFloat(document.getElementById('edit-alq-precio-dia').value) || 0,
+    notas:              document.getElementById('edit-alq-notas').value || null,
+  };
+  const btn = e.target.querySelector('[type=submit]');
+  btn.disabled = true;
+  const { error } = await supabase.from('alquileres').update(updates).eq('id', id);
+  btn.disabled = false;
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  showToast('Alquiler actualizado', 'success');
+  document.getElementById('modal-editar-alq').classList.add('hidden');
+  cargarAlquileres();
+});
 
 init();

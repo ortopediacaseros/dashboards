@@ -182,8 +182,9 @@ window.abrirDetallePlt = (id) => {
     waLink ? `<a href="${waLink}" target="_blank" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">📲 WhatsApp</a>` : '',
   ].filter(Boolean).join('');
 
-  // Borrar
+  // Borrar / Editar
   document.getElementById('btn-borrar-plt').onclick = () => window.borrarPlt(p.id);
+  document.getElementById('btn-editar-plt').onclick = () => window.abrirEditarPlt(p.id);
 
   document.getElementById('modal-detalle-plt').classList.remove('hidden');
 };
@@ -200,6 +201,26 @@ window.cambiarEstadoPlt = async (id, nuevoEstado) => {
   cargarPedidos();
 };
 
+window.abrirEditarPlt = (id) => {
+  const p = todosPedidos.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('modal-detalle-plt').classList.add('hidden');
+  document.getElementById('edit-plt-id').value = p.id;
+  document.getElementById('edit-plt-nombre').value = p.cliente_nombre || '';
+  document.getElementById('edit-plt-telefono').value = p.cliente_telefono || '';
+  document.getElementById('edit-plt-orden').value = p.nro_orden || '';
+  document.getElementById('edit-plt-proveedor').value = p.proveedor || '';
+  document.getElementById('edit-plt-pie').value = p.pie || 'ambos';
+  document.getElementById('edit-plt-tipo').value = p.tipo || '';
+  document.getElementById('edit-plt-talle').value = p.talle || '';
+  document.getElementById('edit-plt-precio').value = p.precio || 0;
+  document.getElementById('edit-plt-sena').value = p.sena || 0;
+  document.getElementById('edit-plt-fecha-pedido').value = p.fecha_pedido || '';
+  document.getElementById('edit-plt-fecha-entrega').value = p.fecha_entrega_prevista || '';
+  document.getElementById('edit-plt-notas').value = p.notas || '';
+  document.getElementById('modal-editar-plt').classList.remove('hidden');
+};
+
 window.borrarPlt = async (id) => {
   const p = todosPedidos.find(x => x.id === id);
   if (!p) return;
@@ -210,6 +231,40 @@ window.borrarPlt = async (id) => {
   document.getElementById('modal-detalle-plt').classList.add('hidden');
   cargarPedidos();
 };
+
+// ── Edit form ─────────────────────────────────────────────────────────────────
+document.getElementById('btn-cerrar-editar-plt').addEventListener('click', () => {
+  document.getElementById('modal-editar-plt').classList.add('hidden');
+});
+document.getElementById('modal-editar-plt').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-editar-plt')) document.getElementById('modal-editar-plt').classList.add('hidden');
+});
+document.getElementById('form-editar-plt').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('edit-plt-id').value;
+  const updates = {
+    cliente_nombre:         document.getElementById('edit-plt-nombre').value,
+    cliente_telefono:       document.getElementById('edit-plt-telefono').value || null,
+    nro_orden:              document.getElementById('edit-plt-orden').value || null,
+    proveedor:              document.getElementById('edit-plt-proveedor').value || null,
+    pie:                    document.getElementById('edit-plt-pie').value,
+    tipo:                   document.getElementById('edit-plt-tipo').value || null,
+    talle:                  document.getElementById('edit-plt-talle').value || null,
+    precio:                 parseFloat(document.getElementById('edit-plt-precio').value) || 0,
+    sena:                   parseFloat(document.getElementById('edit-plt-sena').value) || 0,
+    fecha_pedido:           document.getElementById('edit-plt-fecha-pedido').value || null,
+    fecha_entrega_prevista: document.getElementById('edit-plt-fecha-entrega').value || null,
+    notas:                  document.getElementById('edit-plt-notas').value || null,
+  };
+  const btn = e.target.querySelector('[type=submit]');
+  btn.disabled = true;
+  const { error } = await supabase.from('pedidos_plantillas').update(updates).eq('id', id);
+  btn.disabled = false;
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  showToast('Pedido actualizado', 'success');
+  document.getElementById('modal-editar-plt').classList.add('hidden');
+  cargarPedidos();
+});
 
 // ── Eventos ───────────────────────────────────────────────────────────────────
 function bindEvents() {

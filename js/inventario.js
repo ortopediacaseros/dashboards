@@ -231,7 +231,9 @@ function renderTabla() {
       : 0;
 
     let stockClass, fillClass;
-    if (p.stock_actual === 1) {
+    if (p.stock_actual === 0) {
+      stockClass = 'stock-zero'; fillClass = 'zero';
+    } else if (p.stock_actual === 1) {
       stockClass = 'stock-crit'; fillClass = 'crit';
     } else if (p.stock_actual <= 5) {
       stockClass = 'stock-warn'; fillClass = 'warn';
@@ -239,7 +241,7 @@ function renderTabla() {
       stockClass = 'stock-ok'; fillClass = 'ok';
     }
     const maxStock = Math.max(p.stock_actual, 10, 1);
-    const fillPct = Math.min(100, Math.round((p.stock_actual / maxStock) * 100));
+    const fillPct = p.stock_actual === 0 ? 100 : Math.min(100, Math.round((p.stock_actual / maxStock) * 100));
 
     const imgHtml = p.imagen_url
       ? `<img src="${p.imagen_url}" alt="" loading="lazy"
@@ -248,7 +250,7 @@ function renderTabla() {
       : `<div style="width:40px;height:40px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text-dim)">📦</div>`;
 
     return `
-      <tr>
+      <tr${p.stock_actual === 0 ? ' style="background:rgba(239,68,68,0.06)"' : ''}>
         <td>
           <div style="display:flex;align-items:center;gap:10px">
             ${imgHtml}

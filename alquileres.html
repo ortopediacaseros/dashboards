@@ -193,7 +193,55 @@
         <button class="modal-close" id="btn-cerrar-detalle-alq">✕</button>
       </div>
       <div id="detalle-alq-content"></div>
-      <div style="display:flex;gap:10px;margin-top:20px" id="detalle-alq-actions"></div>
+      <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap" id="detalle-alq-actions"></div>
+    </div>
+  </div>
+
+  <!-- Modal editar alquiler -->
+  <div class="modal-overlay hidden" id="modal-editar-alq">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-header">
+        <span class="modal-title">Editar alquiler</span>
+        <button class="modal-close" id="btn-cerrar-editar-alq">✕</button>
+      </div>
+      <form id="form-editar-alq">
+        <input type="hidden" id="edit-alq-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nombre del cliente *</label>
+            <input type="text" class="input" id="edit-alq-nombre" required>
+          </div>
+          <div class="form-group">
+            <label>Teléfono</label>
+            <input type="tel" class="input" id="edit-alq-telefono">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Fecha inicio</label>
+            <input type="date" class="input" id="edit-alq-fecha-inicio">
+          </div>
+          <div class="form-group">
+            <label>Fecha devolución prevista</label>
+            <input type="date" class="input" id="edit-alq-fecha-fin">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Depósito ($)</label>
+            <input type="number" class="input" id="edit-alq-deposito" min="0" step="100">
+          </div>
+          <div class="form-group">
+            <label>Precio por día ($)</label>
+            <input type="number" class="input" id="edit-alq-precio-dia" min="0" step="50">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notas</label>
+          <textarea class="input" id="edit-alq-notas" rows="2" style="resize:vertical"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Guardar cambios</button>
+      </form>
     </div>
   </div>
 
