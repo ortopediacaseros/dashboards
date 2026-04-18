@@ -176,6 +176,7 @@ function renderGrid() {
   document.getElementById('cal-month-label').textContent = `${MESES[mesActual]} ${anioActual}`;
 
   const hoy      = new Date().toISOString().split('T')[0];
+  const en7      = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
   const feriados = feriadosArgentina(anioActual);
 
   const primerDia  = new Date(anioActual, mesActual, 1);
@@ -229,11 +230,13 @@ function renderGrid() {
     const eventosHoy = eventosPorDia[fecha] || [];
     const tienePlt = pltFechas[fecha]?.length > 0;
 
+    const esProximaSemana = fecha > hoy && fecha <= en7;
     const clases = ['cal-cell'];
     if (esHoy) clases.push('hoy');
     if (esSel && !esHoy) clases.push('seleccionado');
     if (ferList) clases.push('feriado');
     if (esFin) clases.push('fin-semana');
+    if (esProximaSemana && !esHoy) clases.push('proxima-semana');
 
     // Dots: feriado + por tipo evento + alquiler + plantilla + venta
     const dots = [];
@@ -260,7 +263,18 @@ function renderGrid() {
   }).join('');
 
   grid.querySelectorAll('.cal-cell[data-fecha]').forEach(el => {
-    el.addEventListener('click', () => seleccionarDia(el.dataset.fecha));
+    el.addEventListener('click', () => {
+      const fecha = el.dataset.fecha;
+      const tieneContenido = (eventosPorDia[fecha]?.length > 0)
+        || alqFechas[fecha]?.length > 0
+        || pltFechas[fecha]?.length > 0
+        || feriados[fecha];
+      if (!tieneContenido) {
+        abrirModal({ fecha });
+      } else {
+        seleccionarDia(fecha);
+      }
+    });
   });
 }
 

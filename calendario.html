@@ -40,6 +40,7 @@
     .cal-cell.seleccionado { background:var(--brand-dim); border-color:var(--brand); }
     .cal-cell.feriado { background:rgba(245,158,11,0.08); }
     .cal-cell.fin-semana .cal-cell-num { color:var(--red); opacity:.7; }
+    .cal-cell.proxima-semana { border-color:var(--brand); border-style:dashed; opacity:1; }
 
     .cal-cell-num {
       font-size:13px; font-weight:600; color:var(--text);
@@ -153,6 +154,7 @@
             <div class="cal-leyenda-item"><span class="cal-dot cal-dot-alquiler"></span>Venc. alquiler</div>
             <div class="cal-leyenda-item"><span class="cal-dot cal-dot-plantilla"></span>Entrega plantilla</div>
             <div class="cal-leyenda-item"><span class="cal-dot cal-dot-venta"></span>Ventas registradas</div>
+            <div class="cal-leyenda-item"><span style="display:inline-block;width:12px;height:12px;border:1.5px dashed var(--brand);border-radius:3px;vertical-align:middle"></span>&nbsp;Próximos 7 días</div>
           </div>
 
           <!-- Detalle del día seleccionado -->
