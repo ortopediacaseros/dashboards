@@ -23,7 +23,8 @@ const NAV_CONFIG = [
   {
     label: 'Gestión',
     items: [
-      { href: 'facturas.html', icon: '📑', label: 'Facturas' },
+      { href: 'facturas.html',   icon: '📑', label: 'Facturas' },
+      { href: 'calendario.html', icon: '📅', label: 'Calendario' },
     ]
   },
   {

@@ -412,41 +412,52 @@ async function verificarCaja() {
 }
 
 async function cargarParaHoy() {
-  const hoy = new Date().toISOString().split('T')[0];
-  const el  = document.getElementById('para-hoy-contenido');
+  const hoy  = new Date().toISOString().split('T')[0];
+  const en3  = new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0];
+  const en7  = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+  const el   = document.getElementById('para-hoy-contenido');
   const badge = document.getElementById('para-hoy-badge');
 
-  const [{ data: alquileres }, { data: plantillas }] = await Promise.all([
-    supabase
-      .from('alquileres')
-      .select('id, cliente_nombre, productos(nombre), fecha_fin_prevista, deposito')
-      .lte('fecha_fin_prevista', hoy)
-      .not('estado', 'eq', 'devuelto'),
-    supabase
-      .from('pedidos_plantillas')
-      .select('id, cliente_nombre, pie, estado, fecha_entrega_estimada')
-      .eq('estado', 'listo'),
+  const [
+    { data: alqVencidos },
+    { data: alqProximos },
+    { data: plantillasListas },
+    { data: plantillasProximas },
+    { data: calEventos },
+  ] = await Promise.all([
+    supabase.from('alquileres')
+      .select('id,cliente_nombre,productos(nombre),fecha_fin_prevista,deposito')
+      .lte('fecha_fin_prevista', hoy).not('estado','eq','devuelto'),
+    supabase.from('alquileres')
+      .select('id,cliente_nombre,productos(nombre),fecha_fin_prevista')
+      .gt('fecha_fin_prevista', hoy).lte('fecha_fin_prevista', en3).not('estado','eq','devuelto'),
+    supabase.from('pedidos_plantillas')
+      .select('id,cliente_nombre,pie').eq('estado','listo'),
+    supabase.from('pedidos_plantillas')
+      .select('id,cliente_nombre,pie,fecha_entrega_prevista')
+      .not('estado','in','("entregado")')
+      .not('fecha_entrega_prevista','is','null')
+      .gte('fecha_entrega_prevista', hoy).lte('fecha_entrega_prevista', en3),
+    supabase.from('calendario')
+      .select('id,titulo,fecha,hora,tipo,descripcion')
+      .gte('fecha', hoy).lte('fecha', en7).order('fecha').order('hora'),
   ]);
 
-  const items = [];
+  const urgentes = [], proximos = [], semana = [];
 
-  (alquileres || []).forEach(a => {
+  (alqVencidos || []).forEach(a => {
     const venceHoy = a.fecha_fin_prevista === hoy;
-    items.push({
-      tipo: 'alquiler',
-      urgente: !venceHoy, // ya vencido
+    urgentes.push({
       titulo: a.cliente_nombre || 'Cliente',
       sub: `${a.productos?.nombre || '—'} · depósito ${formatMoney(a.deposito || 0)}`,
-      tag: venceHoy ? '🔔 Vence hoy' : '🔴 Vencido',
+      tag: venceHoy ? '🔔 Vence hoy' : '🔴 Alquiler vencido',
       tagColor: venceHoy ? 'var(--amber)' : 'var(--red)',
       href: 'alquileres.html',
     });
   });
 
-  (plantillas || []).forEach(p => {
-    items.push({
-      tipo: 'plantilla',
-      urgente: false,
+  (plantillasListas || []).forEach(p => {
+    urgentes.push({
       titulo: p.cliente_nombre || 'Cliente',
       sub: `Pie ${p.pie || '—'}`,
       tag: '✅ Lista para entregar',
@@ -455,24 +466,71 @@ async function cargarParaHoy() {
     });
   });
 
-  if (items.length === 0) {
+  (alqProximos || []).forEach(a => {
+    const dias = Math.ceil((new Date(a.fecha_fin_prevista) - new Date(hoy)) / 86400000);
+    proximos.push({
+      titulo: a.cliente_nombre || 'Cliente',
+      sub: a.productos?.nombre || '—',
+      tag: `🔄 Vence en ${dias}d`,
+      tagColor: 'var(--amber)',
+      href: 'alquileres.html',
+    });
+  });
+
+  (plantillasProximas || []).forEach(p => {
+    const dias = Math.ceil((new Date(p.fecha_entrega_prevista) - new Date(hoy)) / 86400000);
+    proximos.push({
+      titulo: p.cliente_nombre || 'Cliente',
+      sub: `Pie ${p.pie || '—'}`,
+      tag: dias === 0 ? '🦶 Entrega hoy' : `🦶 Entrega en ${dias}d`,
+      tagColor: dias === 0 ? 'var(--green)' : 'var(--blue)',
+      href: 'plantillas.html',
+    });
+  });
+
+  const TIPOS_CAL = { evento:'📅', entrega:'📦', cheque:'🏦', pago:'💳', reunion:'🤝', otro:'📌' };
+  (calEventos || []).forEach(e => {
+    const esHoy = e.fecha === hoy;
+    const dias  = Math.ceil((new Date(e.fecha) - new Date(hoy)) / 86400000);
+    const icon  = TIPOS_CAL[e.tipo] || '📅';
+    const tagLabel = esHoy ? `${icon} Hoy` : `${icon} En ${dias}d`;
+    const tagColor = esHoy ? 'var(--brand)' : 'var(--text-3)';
+    semana.push({
+      titulo: e.titulo,
+      sub: e.descripcion || '',
+      tag: tagLabel,
+      tagColor,
+      href: 'calendario.html',
+    });
+  });
+
+  const total = urgentes.length + proximos.length + semana.length;
+
+  if (total === 0) {
     el.innerHTML = `<div class="sum-row" style="justify-content:center;color:var(--text-3)">Todo al día — sin pendientes urgentes ✓</div>`;
     return;
   }
 
   badge.style.display = '';
-  badge.className = 'badge b-red';
-  badge.textContent = items.length;
+  badge.className = urgentes.length > 0 ? 'badge b-red' : 'badge b-blue';
+  badge.textContent = total;
 
-  el.innerHTML = items.map(it => `
+  const renderItem = it => `
     <div class="sum-row" style="gap:10px">
-      <span style="color:${it.tagColor};font-size:11px;font-weight:600;min-width:110px">${it.tag}</span>
+      <span style="color:${it.tagColor};font-size:11px;font-weight:600;min-width:120px">${it.tag}</span>
       <span style="flex:1">
         <strong>${it.titulo}</strong>
-        <span style="color:var(--text-3);font-size:12px;margin-left:6px">${it.sub}</span>
+        ${it.sub ? `<span style="color:var(--text-3);font-size:12px;margin-left:6px">${it.sub}</span>` : ''}
       </span>
       <a href="${it.href}" class="btn btn-ghost btn-sm">Ver →</a>
-    </div>`).join('');
+    </div>`;
+
+  const sections = [];
+  if (urgentes.length)  sections.push(urgentes.map(renderItem).join(''));
+  if (proximos.length)  sections.push(`<div style="padding:4px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);background:var(--bg)">Próximos 3 días</div>` + proximos.map(renderItem).join(''));
+  if (semana.length)    sections.push(`<div style="padding:4px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);background:var(--bg)">Esta semana</div>` + semana.map(renderItem).join(''));
+
+  el.innerHTML = sections.join('');
 }
 
 init();

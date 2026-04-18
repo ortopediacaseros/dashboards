@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendario — Ortopedia Caseros</title>
+  <script>if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');</script>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .tipo-evento   { color: var(--brand);  background: var(--brand-dim); }
+    .tipo-entrega  { color: var(--amber);  background: var(--amber-bg);  }
+    .tipo-cheque   { color: var(--purple); background: var(--purple-bg); }
+    .tipo-pago     { color: var(--green);  background: var(--green-bg);  }
+    .tipo-reunion  { color: var(--blue);   background: var(--blue-bg);   }
+    .tipo-otro     { color: var(--text-3); background: var(--surface-2); }
+
+    .cal-nav { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+    .cal-nav-btn { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 14px; cursor:pointer; color:var(--text); font-size:14px; }
+    .cal-nav-btn:hover { background:var(--surface-2); }
+    .cal-month { font-size:18px; font-weight:700; color:var(--text); min-width:160px; text-align:center; }
+
+    .cal-day-group { margin-bottom:12px; }
+    .cal-day-header { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-3); padding:6px 16px; background:var(--bg); border-bottom:1px solid var(--border); }
+    .cal-day-header.hoy { color:var(--brand); }
+    .cal-event { display:flex; align-items:center; gap:12px; padding:11px 16px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; }
+    .cal-event:hover { background:var(--surface-2); }
+    .cal-event:last-child { border-bottom:none; }
+    .cal-event-hora { font-size:11px; color:var(--text-3); min-width:40px; text-align:right; font-variant-numeric:tabular-nums; }
+    .cal-event-titulo { font-size:13px; font-weight:500; color:var(--text); flex:1; }
+    .cal-event-desc { font-size:11px; color:var(--text-3); margin-top:2px; }
+    .cal-tipo-badge { font-size:10px; font-weight:600; padding:2px 8px; border-radius:10px; }
+    .cal-empty { text-align:center; padding:40px 16px; color:var(--text-3); font-size:13px; }
+
+    .filter-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+  </style>
+</head>
+<body>
+  <button class="hamburger" id="hamburger">☰</button>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="logo">🦴 Ortopedia Caseros</div>
+    </nav>
+
+    <main class="main">
+      <div class="topbar" id="topbar"></div>
+
+      <div class="page-content">
+        <div class="page-header">
+          <div>
+            <div class="page-title">📅 Calendario</div>
+            <div class="page-subtitle">Recordatorios y eventos de la ortopedia</div>
+          </div>
+          <button class="btn btn-primary" id="btn-nuevo">+ Nuevo evento</button>
+        </div>
+
+        <div class="card" style="margin-bottom:20px">
+          <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+            <div class="cal-nav">
+              <button class="cal-nav-btn" id="btn-prev">‹</button>
+              <div class="cal-month" id="cal-month-label">—</div>
+              <button class="cal-nav-btn" id="btn-next">›</button>
+              <button class="cal-nav-btn" id="btn-hoy-nav" style="font-size:12px">Hoy</button>
+            </div>
+            <div class="filter-row" style="margin:0">
+              <select class="select" id="filtro-tipo" style="min-width:140px">
+                <option value="">Todos los tipos</option>
+                <option value="evento">Evento</option>
+                <option value="entrega">Entrega mercadería</option>
+                <option value="cheque">Vencimiento cheque</option>
+                <option value="pago">Pago</option>
+                <option value="reunion">Reunión</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+          </div>
+          <div id="cal-lista"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal nuevo/editar evento -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal" style="max-width:460px">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-titulo">Nuevo evento</div>
+        <button class="modal-close" id="btn-cerrar-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-evento">
+          <input type="hidden" id="ev-id">
+          <div class="form-row">
+            <label class="label">Título *</label>
+            <input type="text" class="input" id="ev-titulo" required placeholder="Ej: Entrega proveedor Inti">
+          </div>
+          <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <label class="label">Fecha *</label>
+              <input type="date" class="input" id="ev-fecha" required>
+            </div>
+            <div>
+              <label class="label">Hora (opcional)</label>
+              <input type="time" class="input" id="ev-hora">
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="label">Tipo</label>
+            <select class="select" id="ev-tipo">
+              <option value="evento">Evento general</option>
+              <option value="entrega">Entrega de mercadería</option>
+              <option value="cheque">Vencimiento de cheque</option>
+              <option value="pago">Pago</option>
+              <option value="reunion">Reunión</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="label">Descripción (opcional)</label>
+            <textarea class="input" id="ev-descripcion" rows="2" placeholder="Detalles del evento..." style="resize:vertical"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="display:flex;gap:8px">
+        <button class="btn btn-danger btn-sm" id="btn-eliminar" style="display:none">🗑 Eliminar</button>
+        <div style="flex:1"></div>
+        <button class="btn btn-secondary" id="btn-cancelar">Cancelar</button>
+        <button class="btn btn-primary" id="btn-guardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/calendario.js"></script>
+  <script type="module" src="js/common.js"></script>
+</body>
+</html>
