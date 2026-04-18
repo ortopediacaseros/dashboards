@@ -168,6 +168,8 @@ window.abrirDetallePlt = (id) => {
       <div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">PEDIDO</div>${p.fecha_pedido ? formatDate(p.fecha_pedido) : '—'}</div>
       <div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">ENTREGA PREVISTA</div>${p.fecha_entrega_prevista ? formatDate(p.fecha_entrega_prevista) : '—'}</div>
       <div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">PRECIO</div><strong>${formatMoney(p.precio)}</strong></div>
+      <div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">COSTO</div>${p.costo ? formatMoney(p.costo) : '—'}</div>
+      ${p.precio && p.costo ? `<div style="grid-column:1/-1"><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">MARGEN</div><span style="color:var(--green);font-weight:600">${Math.round(((p.precio - p.costo) / p.precio) * 100)}% · ganancia ${formatMoney(p.precio - p.costo)}</span></div>` : ''}
       <div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">SEÑA</div>${formatMoney(p.sena)}</div>
       ${p.notas ? `<div style="grid-column:1/-1"><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">NOTAS</div><span style="color:var(--text-2)">${p.notas}</span></div>` : ''}
       ${p.fecha_entrega_real ? `<div><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">ENTREGADO</div>${formatDate(p.fecha_entrega_real)}</div>` : ''}
@@ -218,6 +220,7 @@ window.abrirEditarPlt = (id) => {
   document.getElementById('edit-plt-tipo').value = p.tipo || '';
   document.getElementById('edit-plt-talle').value = p.talle || '';
   document.getElementById('edit-plt-precio').value = p.precio || 0;
+  document.getElementById('edit-plt-costo').value = p.costo || 0;
   document.getElementById('edit-plt-sena').value = p.sena || 0;
   document.getElementById('edit-plt-fecha-pedido').value = p.fecha_pedido || '';
   document.getElementById('edit-plt-fecha-entrega').value = p.fecha_entrega_prevista || '';
@@ -255,6 +258,7 @@ document.getElementById('form-editar-plt').addEventListener('submit', async (e) 
     tipo:                   document.getElementById('edit-plt-tipo').value || null,
     talle:                  document.getElementById('edit-plt-talle').value || null,
     precio:                 parseFloat(document.getElementById('edit-plt-precio').value) || 0,
+    costo:                  parseFloat(document.getElementById('edit-plt-costo').value) || null,
     sena:                   parseFloat(document.getElementById('edit-plt-sena').value) || 0,
     fecha_pedido:           document.getElementById('edit-plt-fecha-pedido').value || null,
     fecha_entrega_prevista: document.getElementById('edit-plt-fecha-entrega').value || null,
@@ -314,6 +318,7 @@ function bindEvents() {
       talle:                  fd.get('talle') || null,
       proveedor:              fd.get('proveedor') || null,
       precio:                 parseFloat(fd.get('precio')) || 0,
+      costo:                  parseFloat(fd.get('costo')) || null,
       sena:                   parseFloat(fd.get('sena')) || 0,
       notas:                  fd.get('notas') || null,
       fecha_pedido:           fd.get('fecha_pedido'),
