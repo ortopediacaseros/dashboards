@@ -7,6 +7,7 @@
   <script>if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');</script>
   <link rel="stylesheet" href="css/styles.css">
   <style>
+    /* ── Tipo badges ── */
     .tipo-evento   { color: var(--brand);  background: var(--brand-dim); }
     .tipo-entrega  { color: var(--amber);  background: var(--amber-bg);  }
     .tipo-cheque   { color: var(--purple); background: var(--purple-bg); }
@@ -14,24 +15,75 @@
     .tipo-reunion  { color: var(--blue);   background: var(--blue-bg);   }
     .tipo-otro     { color: var(--text-3); background: var(--surface-2); }
 
-    .cal-nav { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
-    .cal-nav-btn { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 14px; cursor:pointer; color:var(--text); font-size:14px; }
+    /* ── Nav ── */
+    .cal-nav { display:flex; align-items:center; gap:8px; }
+    .cal-nav-btn { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:5px 12px; cursor:pointer; color:var(--text); font-size:14px; transition:background 0.15s; }
     .cal-nav-btn:hover { background:var(--surface-2); }
-    .cal-month { font-size:18px; font-weight:700; color:var(--text); min-width:160px; text-align:center; }
+    .cal-month { font-size:17px; font-weight:700; color:var(--text); min-width:180px; text-align:center; }
 
-    .cal-day-group { margin-bottom:12px; }
-    .cal-day-header { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-3); padding:6px 16px; background:var(--bg); border-bottom:1px solid var(--border); }
-    .cal-day-header.hoy { color:var(--brand); }
-    .cal-event { display:flex; align-items:center; gap:12px; padding:11px 16px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; }
-    .cal-event:hover { background:var(--surface-2); }
-    .cal-event:last-child { border-bottom:none; }
-    .cal-event-hora { font-size:11px; color:var(--text-3); min-width:40px; text-align:right; font-variant-numeric:tabular-nums; }
-    .cal-event-titulo { font-size:13px; font-weight:500; color:var(--text); flex:1; }
-    .cal-event-desc { font-size:11px; color:var(--text-3); margin-top:2px; }
-    .cal-tipo-badge { font-size:10px; font-weight:600; padding:2px 8px; border-radius:10px; }
-    .cal-empty { text-align:center; padding:40px 16px; color:var(--text-3); font-size:13px; }
+    /* ── Grid calendar ── */
+    .cal-grid-wrap { padding:0 16px 16px; }
+    .cal-grid-head { display:grid; grid-template-columns:repeat(7,1fr); margin-bottom:4px; }
+    .cal-grid-head-cell { text-align:center; font-size:11px; font-weight:700; color:var(--text-3); text-transform:uppercase; letter-spacing:0.4px; padding:8px 0; }
+    .cal-grid-head-cell.fin-de-semana { color:var(--red); opacity:.7; }
 
-    .filter-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+    .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+    .cal-cell {
+      min-height:68px; padding:5px 6px 4px; border-radius:8px; cursor:pointer;
+      transition:background 0.12s; position:relative; background:var(--surface);
+      border:1px solid transparent;
+    }
+    .cal-cell:hover { background:var(--surface-2); border-color:var(--border); }
+    .cal-cell.otro-mes { opacity:.3; cursor:default; }
+    .cal-cell.otro-mes:hover { background:var(--surface); border-color:transparent; }
+    .cal-cell.hoy { border-color:var(--brand) !important; background:var(--brand-dim); }
+    .cal-cell.seleccionado { background:var(--brand-dim); border-color:var(--brand); }
+    .cal-cell.feriado { background:rgba(245,158,11,0.08); }
+    .cal-cell.fin-semana .cal-cell-num { color:var(--red); opacity:.7; }
+
+    .cal-cell-num {
+      font-size:13px; font-weight:600; color:var(--text);
+      width:24px; height:24px; display:flex; align-items:center; justify-content:center;
+      border-radius:50%; margin-bottom:3px;
+    }
+    .cal-cell.hoy .cal-cell-num { background:var(--brand); color:white; }
+
+    .cal-cell-dots { display:flex; flex-wrap:wrap; gap:3px; margin-top:2px; }
+    .cal-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .cal-dot-feriado  { background:var(--amber);  }
+    .cal-dot-evento   { background:var(--brand);  }
+    .cal-dot-entrega  { background:var(--amber);  }
+    .cal-dot-cheque   { background:var(--purple); }
+    .cal-dot-pago     { background:var(--green);  }
+    .cal-dot-reunion  { background:var(--blue);   }
+    .cal-dot-otro     { background:var(--text-3); }
+    .cal-dot-alquiler { background:var(--red);    }
+    .cal-dot-plantilla{ background:var(--green);  }
+    .cal-dot-venta    { background:rgba(107,114,128,.45); }
+
+    .cal-feriado-label {
+      font-size:9px; font-weight:600; color:var(--amber); line-height:1.2;
+      overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+      margin-top:2px;
+    }
+
+    /* ── Leyenda ── */
+    .cal-leyenda { display:flex; flex-wrap:wrap; gap:12px; padding:10px 16px; border-top:1px solid var(--border); }
+    .cal-leyenda-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-3); }
+
+    /* ── Detalle día ── */
+    .cal-detalle { padding:16px 20px; border-top:1px solid var(--border); }
+    .cal-detalle-header { font-size:13px; font-weight:700; color:var(--text); margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+    .cal-detalle-empty { font-size:13px; color:var(--text-3); padding:8px 0; }
+    .cal-detalle-item { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+    .cal-detalle-item:last-child { border-bottom:none; }
+    .cal-detalle-icon { width:28px; height:28px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; margin-top:1px; }
+    .cal-detalle-titulo { font-size:13px; font-weight:500; color:var(--text); }
+    .cal-detalle-sub { font-size:11px; color:var(--text-3); margin-top:2px; }
+    .cal-detalle-actions { margin-left:auto; display:flex; gap:6px; align-items:center; }
+
+    /* ── Exportar ── */
+    .filter-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
   </style>
 </head>
 <body>
@@ -50,32 +102,61 @@
         <div class="page-header">
           <div>
             <div class="page-title">📅 Calendario</div>
-            <div class="page-subtitle">Recordatorios y eventos de la ortopedia</div>
+            <div class="page-subtitle">Eventos, feriados, alquileres y plantillas</div>
           </div>
-          <button class="btn btn-primary" id="btn-nuevo">+ Nuevo evento</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary btn-sm" id="btn-exportar" title="Exportar mes para WhatsApp">📤 Exportar</button>
+            <button class="btn btn-primary" id="btn-nuevo">+ Nuevo evento</button>
+          </div>
         </div>
 
         <div class="card" style="margin-bottom:20px">
-          <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <!-- Navegación -->
+          <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
             <div class="cal-nav">
               <button class="cal-nav-btn" id="btn-prev">‹</button>
               <div class="cal-month" id="cal-month-label">—</div>
               <button class="cal-nav-btn" id="btn-next">›</button>
-              <button class="cal-nav-btn" id="btn-hoy-nav" style="font-size:12px">Hoy</button>
+              <button class="cal-nav-btn" id="btn-hoy-nav" style="font-size:11px;padding:4px 10px">Hoy</button>
             </div>
-            <div class="filter-row" style="margin:0">
-              <select class="select" id="filtro-tipo" style="min-width:140px">
+            <div class="filter-row">
+              <select class="select" id="filtro-tipo" style="min-width:140px;font-size:12px">
                 <option value="">Todos los tipos</option>
                 <option value="evento">Evento</option>
                 <option value="entrega">Entrega mercadería</option>
-                <option value="cheque">Vencimiento cheque</option>
+                <option value="cheque">Vto. cheque</option>
                 <option value="pago">Pago</option>
                 <option value="reunion">Reunión</option>
                 <option value="otro">Otro</option>
               </select>
             </div>
           </div>
-          <div id="cal-lista"></div>
+
+          <!-- Grid calendario -->
+          <div class="cal-grid-wrap" style="padding-top:14px">
+            <div class="cal-grid-head" id="cal-grid-head">
+              <div class="cal-grid-head-cell fin-de-semana">Dom</div>
+              <div class="cal-grid-head-cell">Lun</div>
+              <div class="cal-grid-head-cell">Mar</div>
+              <div class="cal-grid-head-cell">Mié</div>
+              <div class="cal-grid-head-cell">Jue</div>
+              <div class="cal-grid-head-cell">Vie</div>
+              <div class="cal-grid-head-cell fin-de-semana">Sáb</div>
+            </div>
+            <div class="cal-grid" id="cal-grid"></div>
+          </div>
+
+          <!-- Leyenda -->
+          <div class="cal-leyenda">
+            <div class="cal-leyenda-item"><span class="cal-dot cal-dot-feriado"></span>Feriado nacional</div>
+            <div class="cal-leyenda-item"><span class="cal-dot cal-dot-evento"></span>Evento</div>
+            <div class="cal-leyenda-item"><span class="cal-dot cal-dot-alquiler"></span>Venc. alquiler</div>
+            <div class="cal-leyenda-item"><span class="cal-dot cal-dot-plantilla"></span>Entrega plantilla</div>
+            <div class="cal-leyenda-item"><span class="cal-dot cal-dot-venta"></span>Ventas registradas</div>
+          </div>
+
+          <!-- Detalle del día seleccionado -->
+          <div class="cal-detalle" id="cal-detalle" style="display:none"></div>
         </div>
       </div>
     </main>
