@@ -60,11 +60,13 @@ async function cargarKPIs() {
   const ayer = new Date(Date.now() - 86400000).toISOString().split('T')[0];
   const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
 
-  const [{ data: vHoy }, { data: vAyer }, { data: vMes }, { data: itemsHoy }] = await Promise.all([
+  const [{ data: vHoy }, { data: vAyer }, { data: vMes }, { data: itemsHoy }, { data: pltHoy }, { data: alqHoy }] = await Promise.all([
     supabase.from('ventas').select('total,medio_pago').gte('fecha', hoy+'T00:00:00').lte('fecha', hoy+'T23:59:59'),
     supabase.from('ventas').select('total').gte('fecha', ayer+'T00:00:00').lte('fecha', ayer+'T23:59:59'),
     supabase.from('ventas').select('total,fecha').gte('fecha', inicioMes),
     supabase.from('items_venta').select('cantidad,precio_unitario,subtotal,producto_id,productos(nombre,precio_costo,categoria)').gte('created_at', hoy+'T00:00:00'),
+    supabase.from('pedidos_plantillas').select('precio').eq('estado','entregado').gte('updated_at', hoy+'T00:00:00').lte('updated_at', hoy+'T23:59:59'),
+    supabase.from('alquileres').select('precio_por_dia,fecha_inicio,fecha_devolucion').eq('estado','devuelto').gte('fecha_devolucion', hoy+'T00:00:00').lte('fecha_devolucion', hoy+'T23:59:59'),
   ]);
 
   ventasMes = vMes || [];
@@ -80,14 +82,21 @@ async function cargarKPIs() {
   const mediosPago = {};
 
   (itemsHoy || []).forEach(it => {
-    const c = Number(it.productos?.precio_costo || 0) * it.cantidad;
-    costoHoy += c;
-    gananciaBruta += (Number(it.precio_unitario) - Number(it.productos?.precio_costo || 0)) * it.cantidad;
+    const costoConIva = Number(it.productos?.precio_costo || 0) * 1.21;
+    costoHoy += costoConIva * it.cantidad;
+    gananciaBruta += (Number(it.precio_unitario) - costoConIva) * it.cantidad;
     const pid = it.producto_id, nom = it.productos?.nombre || '';
     prodQty[pid] = (prodQty[pid] || { nom, qty: 0 });
     prodQty[pid].qty += it.cantidad;
     if (prodQty[pid].qty > topProdQty) { topProdQty = prodQty[pid].qty; topProdNombre = nom; }
   });
+
+  const ingresosPlantillas = (pltHoy || []).reduce((s, p) => s + Number(p.precio || 0), 0);
+  const ingresosAlquileres = (alqHoy || []).reduce((s, a) => {
+    const dias = Math.max(1, Math.ceil((new Date(a.fecha_devolucion) - new Date(a.fecha_inicio)) / 86400000));
+    return s + Number(a.precio_por_dia || 0) * dias;
+  }, 0);
+  gananciaBruta += ingresosPlantillas + ingresosAlquileres;
 
   (vHoy || []).forEach(v => {
     const mp = v.medio_pago || 'otro';
@@ -117,7 +126,7 @@ async function cargarKPIs() {
   document.getElementById('kpi-stock-crit').textContent = critCount;
 
   cargarGrafico(ventasMes);
-  cargarResumenDia({ totalHoy, ticketsHoy, costoHoy, gananciaBruta, margenHoy, mediosPago, topProdNombre, topProdQty });
+  cargarResumenDia({ totalHoy, ticketsHoy, costoHoy, gananciaBruta, margenHoy, mediosPago, topProdNombre, topProdQty, ingresosPlantillas, ingresosAlquileres });
 }
 
 function cargarGrafico(ventas) {
@@ -154,12 +163,24 @@ function cargarGrafico(ventas) {
   }).join('');
 }
 
-function cargarResumenDia({ totalHoy, ticketsHoy, costoHoy, gananciaBruta, margenHoy, mediosPago, topProdNombre, topProdQty }) {
+function cargarResumenDia({ totalHoy, ticketsHoy, costoHoy, gananciaBruta, margenHoy, mediosPago, topProdNombre, topProdQty, ingresosPlantillas = 0, ingresosAlquileres = 0 }) {
   document.getElementById('res-tickets').textContent   = ticketsHoy;
   document.getElementById('res-facturado').textContent = formatMoney(totalHoy);
   document.getElementById('res-costo').textContent     = formatMoney(costoHoy);
   document.getElementById('res-ganancia').textContent  = formatMoney(gananciaBruta);
   document.getElementById('res-margen').textContent    = margenHoy + '%';
+  const extraEl = document.getElementById('res-extra-servicios');
+  if (extraEl) {
+    if (ingresosPlantillas > 0 || ingresosAlquileres > 0) {
+      const partes = [];
+      if (ingresosPlantillas > 0) partes.push(`Plantillas: ${formatMoney(ingresosPlantillas)}`);
+      if (ingresosAlquileres > 0) partes.push(`Alquileres: ${formatMoney(ingresosAlquileres)}`);
+      extraEl.closest('.sum-row').style.display = '';
+      extraEl.textContent = partes.join(' · ');
+    } else {
+      extraEl.closest('.sum-row').style.display = 'none';
+    }
+  }
   document.getElementById('res-top-prod').textContent  = topProdQty > 0 ? `${topProdNombre} (${topProdQty}u.)` : '—';
 
   const mpLabels = { efectivo: ['b-green','Efect.'], debito: ['b-blue','Déb.'], credito: ['b-purple','Créd.'], transferencia: ['b-blue','Transf.'] };
@@ -238,8 +259,9 @@ function renderStockTable() {
   }
 
   tbody.innerHTML = page.map(p => {
+    const costoReal = p.precio_costo * 1.21;
     const margen = p.precio_costo > 0
-      ? Math.round(((p.precio_venta - p.precio_costo) / p.precio_venta) * 100) : 0;
+      ? Math.round(((p.precio_venta - costoReal) / p.precio_venta) * 100) : 0;
     const maxS = Math.max(p.stock_actual, p.stock_minimo * 3, 1);
     const fillPct = Math.min(100, Math.round((p.stock_actual / maxS) * 100));
     let sColor, fillColor;

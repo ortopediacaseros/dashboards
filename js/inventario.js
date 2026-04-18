@@ -226,8 +226,9 @@ function renderTabla() {
   }
 
   tbody.innerHTML = productos.map(p => {
+    const costoReal = p.precio_costo * 1.21;
     const margen = p.precio_costo > 0
-      ? Math.round(((p.precio_venta - p.precio_costo) / p.precio_venta) * 100)
+      ? Math.round(((p.precio_venta - costoReal) / p.precio_venta) * 100)
       : 0;
 
     let stockClass, fillClass;

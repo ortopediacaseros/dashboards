@@ -244,7 +244,7 @@ async function runSearch(q, resultsEl) {
   }
   resultsEl.style.display = 'block';
   resultsEl.innerHTML = data.map(p => {
-    const dot = p.stock_actual === 1 ? 'stock-crit' : p.stock_actual <= 5 ? 'stock-warn' : 'stock-ok';
+    const dot = p.stock_actual === 0 ? 'stock-zero' : p.stock_actual === 1 ? 'stock-crit' : p.stock_actual <= 5 ? 'stock-warn' : 'stock-ok';
     const img = p.imagen_url
       ? `<img src="${p.imagen_url}" alt="" loading="lazy" style="width:36px;height:36px;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);flex-shrink:0">`
       : `<div style="width:36px;height:36px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px">📦</div>`;
@@ -256,7 +256,7 @@ async function runSearch(q, resultsEl) {
       </div>
       <div style="text-align:right;flex-shrink:0;padding-left:8px">
         <div style="font-weight:700;color:var(--brand)">${formatMoney(p.precio_venta)}</div>
-        <div class="${dot}" style="font-size:11px">${p.stock_actual} u.</div>
+        <div class="${dot}" style="font-size:11px">${p.stock_actual === 0 ? 'SIN STOCK' : p.stock_actual + ' u.'}</div>
       </div>
     </div>`;
   }).join('');

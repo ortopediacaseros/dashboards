@@ -234,14 +234,21 @@ function renderDetalle(v, items) {
 
     const btnBorrar = document.createElement('button');
     btnBorrar.className = 'btn btn-ghost btn-sm';
-    btnBorrar.title = 'Elimina sin restaurar stock';
+    btnBorrar.title = 'Elimina y restaura stock';
     btnBorrar.textContent = '🗑';
-    btnBorrar.addEventListener('click', () => borrarVenta(v.id, v.numero_ticket));
+    btnBorrar.addEventListener('click', () => borrarVenta(v.id, v.numero_ticket, false));
 
     wrap.appendChild(btnEditar);
     wrap.appendChild(btnAnular);
     wrap.appendChild(btnBorrar);
     detalleActions.appendChild(wrap);
+  } else {
+    const btnBorrar = document.createElement('button');
+    btnBorrar.className = 'btn btn-ghost btn-sm';
+    btnBorrar.style.cssText = 'width:100%;margin-top:4px';
+    btnBorrar.textContent = '🗑 Borrar ticket anulado';
+    btnBorrar.addEventListener('click', () => borrarVenta(v.id, v.numero_ticket, true));
+    detalleActions.appendChild(btnBorrar);
   }
 }
 
@@ -360,13 +367,16 @@ function exportarCSV() {
   URL.revokeObjectURL(url);
 }
 
-async function borrarVenta(id, nro) {
-  if (!confirm(`¿Borrar el ticket #${nro}? Se devolverá el stock.`)) return;
-  await restaurarStock(id);
+async function borrarVenta(id, nro, skipRestaurar = false) {
+  const msg = skipRestaurar
+    ? `¿Borrar el ticket #${nro}? (ya estaba anulado, el stock no se toca)`
+    : `¿Borrar el ticket #${nro}? Se devolverá el stock.`;
+  if (!confirm(msg)) return;
+  if (!skipRestaurar) await restaurarStock(id);
   await supabase.from('items_venta').delete().eq('venta_id', id);
   const { error } = await supabase.from('ventas').delete().eq('id', id);
   if (error) { showToast('Error al borrar: ' + error.message, 'error'); return; }
-  showToast(`Ticket #${nro} eliminado y stock restaurado`, 'success');
+  showToast(`Ticket #${nro} eliminado`, 'success');
   overlay.classList.add('hidden');
   await cargarVentas();
 }
