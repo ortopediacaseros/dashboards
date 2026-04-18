@@ -175,11 +175,15 @@ window.abrirDetallePlt = (id) => {
 
   // Botones de transición de estado
   const transiciones = TRANSICIONES[p.estado] || [];
+  const calLinkPlt = p.fecha_entrega_prevista
+    ? `<a href="calendario.html?fecha=${p.fecha_entrega_prevista}&titulo=${encodeURIComponent('Entrega plantilla: ' + p.cliente_nombre)}&tipo=entrega" class="btn btn-ghost btn-sm" style="text-decoration:none">📅 Cal.</a>`
+    : '';
   document.getElementById('detalle-plt-estados').innerHTML = [
     ...transiciones.map(t =>
       `<button class="btn btn-primary" onclick="window.cambiarEstadoPlt('${p.id}','${t.estado}')">${t.label}</button>`
     ),
     waLink ? `<a href="${waLink}" target="_blank" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">📲 WhatsApp</a>` : '',
+    calLinkPlt,
   ].filter(Boolean).join('');
 
   // Borrar / Editar

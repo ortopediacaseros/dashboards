@@ -116,6 +116,8 @@ let ventasDias     = new Set(); // fechas con ventas
 let diaSeleccionado = null;
 let editandoId     = null;
 let filtroTipo     = '';
+let vistaAnio      = false;
+let busqueda       = '';
 
 const overlay     = document.getElementById('modal-overlay');
 const detalleEl   = document.getElementById('cal-detalle');
@@ -133,7 +135,7 @@ async function cargar() {
     { data: plts },
     { data: ventas },
   ] = await Promise.all([
-    supabase.from('calendario').select('*').order('fecha').order('hora'),
+    supabase.from('calendario').select('*').order('fecha').order('hora', { nullsFirst: false }),
     supabase.from('alquileres')
       .select('id,cliente_nombre,productos(nombre),fecha_fin_prevista')
       .not('estado','eq','devuelto')
@@ -165,8 +167,14 @@ async function cargar() {
 
   ventasDias = new Set((ventas || []).map(v => v.fecha.split('T')[0]));
 
-  renderGrid();
-  if (diaSeleccionado) renderDetalle(diaSeleccionado);
+  if (busqueda) {
+    renderBusqueda();
+  } else if (vistaAnio) {
+    renderAnio();
+  } else {
+    renderGrid();
+    if (diaSeleccionado) renderDetalle(diaSeleccionado);
+  }
 }
 
 // ─────────────────────────────────────────────────
@@ -370,9 +378,148 @@ function renderDetalle(fecha) {
 }
 
 // ─────────────────────────────────────────────────
+// Búsqueda de eventos
+// ─────────────────────────────────────────────────
+function renderBusqueda() {
+  const q = busqueda.toLowerCase();
+  const wrap   = document.getElementById('cal-grid-wrap');
+  const searchEl = document.getElementById('cal-search-results');
+  const anioWrap = document.getElementById('cal-anio-wrap');
+  wrap.style.display = 'none';
+  anioWrap.style.display = 'none';
+  detalleEl.style.display = 'none';
+  searchEl.style.display = '';
+
+  const resultados = todosEventos.filter(e =>
+    e.titulo?.toLowerCase().includes(q) ||
+    e.descripcion?.toLowerCase().includes(q)
+  ).sort((a, b) => a.fecha < b.fecha ? -1 : 1);
+
+  if (!resultados.length) {
+    searchEl.innerHTML = `<div style="color:var(--text-3);font-size:13px;padding:8px 0">Sin resultados para "<strong>${busqueda}</strong>"</div>`;
+    return;
+  }
+
+  const DIAS_SHORT = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  searchEl.innerHTML = `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px">${resultados.length} resultado${resultados.length !== 1 ? 's' : ''} para "<strong>${busqueda}</strong>"</div>` +
+    resultados.map(e => {
+      const t = TIPOS[e.tipo] || TIPOS.evento;
+      const d = new Date(e.fecha + 'T12:00:00');
+      const label = `${DIAS_SHORT[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;
+      return `<div class="cal-detalle-item" style="cursor:pointer" onclick="window.irAFecha('${e.fecha}')">
+        <div class="cal-detalle-icon tipo-${e.tipo || 'evento'}" style="background:var(--brand-dim)">${t.icon}</div>
+        <div style="flex:1">
+          <div class="cal-detalle-titulo">${e.titulo}</div>
+          <div class="cal-detalle-sub">${label}${e.hora ? ' · ' + e.hora.slice(0,5) : ''}${e.descripcion ? ' · ' + e.descripcion : ''}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();window.editarEvento('${e.id}')">✏️</button>
+      </div>`;
+    }).join('');
+}
+
+window.irAFecha = (fecha) => {
+  const d = new Date(fecha + 'T12:00:00');
+  mesActual  = d.getMonth();
+  anioActual = d.getFullYear();
+  busqueda   = '';
+  document.getElementById('buscar-evento').value = '';
+  vistaAnio  = false;
+  diaSeleccionado = fecha;
+  document.getElementById('cal-search-results').style.display = 'none';
+  document.getElementById('cal-anio-wrap').style.display = 'none';
+  document.getElementById('cal-grid-wrap').style.display = '';
+  cargar();
+};
+
+// ─────────────────────────────────────────────────
+// Vista anual
+// ─────────────────────────────────────────────────
+function renderAnio() {
+  const wrap     = document.getElementById('cal-grid-wrap');
+  const searchEl = document.getElementById('cal-search-results');
+  const anioWrap = document.getElementById('cal-anio-wrap');
+  wrap.style.display = 'none';
+  searchEl.style.display = 'none';
+  detalleEl.style.display = 'none';
+  anioWrap.style.display = '';
+  document.getElementById('cal-month-label').textContent = `${anioActual}`;
+
+  const hoy      = new Date().toISOString().split('T')[0];
+  const feriados = feriadosArgentina(anioActual);
+  const eventosSet = new Set(todosEventos.filter(e => e.fecha.startsWith(`${anioActual}`)).map(e => e.fecha));
+
+  const DOW_FIN = [0, 6];
+  const PAD = (n) => String(n).padStart(2, '0');
+
+  const meses = Array.from({ length: 12 }, (_, m) => {
+    const primerDia = new Date(anioActual, m, 1);
+    const ultimoDia = new Date(anioActual, m + 1, 0);
+    const startDow  = primerDia.getDay();
+
+    const heads = ['D','L','M','X','J','V','S'].map(h =>
+      `<div class="anio-mini-head">${h}</div>`
+    ).join('');
+
+    const celdas = [];
+    for (let i = 0; i < startDow; i++) celdas.push('<div class="anio-mini-cell otro-mes"></div>');
+    for (let d = 1; d <= ultimoDia.getDate(); d++) {
+      const fecha = `${anioActual}-${PAD(m+1)}-${PAD(d)}`;
+      const dow   = new Date(fecha + 'T12:00:00').getDay();
+      const cls   = ['anio-mini-cell'];
+      if (fecha === hoy) cls.push('hoy');
+      else if (feriados[fecha]) cls.push('feriado');
+      else if (eventosSet.has(fecha)) cls.push('con-evento');
+      if (DOW_FIN.includes(dow) && fecha !== hoy) cls.push('fin-sem');
+      celdas.push(`<div class="${cls.join(' ')}" onclick="window.irAFecha('${fecha}')" title="${feriados[fecha] ? feriados[fecha][0] : ''}">${d}</div>`);
+    }
+    const resto = (7 - ((startDow + ultimoDia.getDate()) % 7)) % 7;
+    for (let i = 0; i < resto; i++) celdas.push('<div class="anio-mini-cell otro-mes"></div>');
+
+    return `<div class="anio-mes">
+      <div class="anio-mes-titulo" onclick="window.irAMes(${m})">${MESES[m]}</div>
+      <div class="anio-mini-grid">${heads}${celdas.join('')}</div>
+    </div>`;
+  });
+
+  anioWrap.innerHTML = `<div class="anio-grid">${meses.join('')}</div>`;
+}
+
+window.irAMes = (mes) => {
+  mesActual  = mes;
+  vistaAnio  = false;
+  document.getElementById('btn-vista-anio').textContent = '📆 Año';
+  document.getElementById('cal-anio-wrap').style.display = 'none';
+  document.getElementById('cal-grid-wrap').style.display = '';
+  cargar();
+};
+
+// ─────────────────────────────────────────────────
+// Recordatorios — mostrar aviso al cargar
+// ─────────────────────────────────────────────────
+function verificarRecordatoriosHoy() {
+  const hoy = new Date().toISOString().split('T')[0];
+  const manana = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const en2  = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
+  const en3  = new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0];
+  const en7  = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+
+  const mapFecha = { 0: hoy, 1: manana, 2: en2, 3: en3, 7: en7 };
+  todosEventos.forEach(e => {
+    if (e.recordatorio_dias == null) return;
+    const targetFecha = mapFecha[e.recordatorio_dias];
+    if (!targetFecha) return;
+    if (e.fecha === targetFecha) {
+      const dias = e.recordatorio_dias;
+      const cuando = dias === 0 ? 'hoy' : dias === 1 ? 'mañana' : `en ${dias} días`;
+      showToast(`📅 ${e.titulo} — ${cuando}`, 'info');
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────
 // Modal CRUD
 // ─────────────────────────────────────────────────
-function abrirModal({ id = null, titulo = '', fecha = null, hora = '', tipo = 'evento', descripcion = '' } = {}) {
+function abrirModal({ id = null, titulo = '', fecha = null, hora = '', tipo = 'evento', descripcion = '', recordatorio_dias = null } = {}) {
   editandoId = id;
   document.getElementById('modal-titulo').textContent = id ? 'Editar evento' : 'Nuevo evento';
   document.getElementById('ev-id').value = id || '';
@@ -380,6 +527,7 @@ function abrirModal({ id = null, titulo = '', fecha = null, hora = '', tipo = 'e
   document.getElementById('ev-fecha').value = fecha || new Date().toISOString().split('T')[0];
   document.getElementById('ev-hora').value = hora;
   document.getElementById('ev-tipo').value = tipo;
+  document.getElementById('ev-recordatorio').value = recordatorio_dias != null ? String(recordatorio_dias) : '';
   document.getElementById('ev-descripcion').value = descripcion;
   document.getElementById('btn-eliminar').style.display = id ? '' : 'none';
   overlay.classList.remove('hidden');
@@ -390,7 +538,7 @@ window.abrirNuevoEnFecha = (fecha) => abrirModal({ fecha });
 window.editarEvento = (id) => {
   const e = todosEventos.find(ev => ev.id === id);
   if (!e) return;
-  abrirModal({ id: e.id, titulo: e.titulo, fecha: e.fecha, hora: e.hora?.slice(0, 5) || '', tipo: e.tipo || 'evento', descripcion: e.descripcion || '' });
+  abrirModal({ id: e.id, titulo: e.titulo, fecha: e.fecha, hora: e.hora?.slice(0, 5) || '', tipo: e.tipo || 'evento', descripcion: e.descripcion || '', recordatorio_dias: e.recordatorio_dias });
 };
 
 async function guardar() {
@@ -398,12 +546,14 @@ async function guardar() {
   const fecha  = document.getElementById('ev-fecha').value;
   if (!titulo || !fecha) { showToast('Completá título y fecha', 'error'); return; }
 
+  const recVal = document.getElementById('ev-recordatorio').value;
   const payload = {
     titulo,
     fecha,
     hora: document.getElementById('ev-hora').value || null,
     tipo: document.getElementById('ev-tipo').value,
     descripcion: document.getElementById('ev-descripcion').value.trim() || null,
+    recordatorio_dias: recVal !== '' ? parseInt(recVal) : null,
   };
 
   let error;
@@ -518,10 +668,61 @@ document.getElementById('btn-hoy-nav').addEventListener('click', () => {
 });
 document.getElementById('filtro-tipo').addEventListener('change', e => {
   filtroTipo = e.target.value;
-  renderGrid();
-  if (diaSeleccionado) renderDetalle(diaSeleccionado);
+  if (!busqueda && !vistaAnio) {
+    renderGrid();
+    if (diaSeleccionado) renderDetalle(diaSeleccionado);
+  }
 });
 
-// Seleccionar hoy al cargar
-diaSeleccionado = new Date().toISOString().split('T')[0];
-cargar();
+document.getElementById('btn-vista-anio').addEventListener('click', () => {
+  vistaAnio = !vistaAnio;
+  document.getElementById('btn-vista-anio').textContent = vistaAnio ? '📅 Mes' : '📆 Año';
+  busqueda = '';
+  document.getElementById('buscar-evento').value = '';
+  if (vistaAnio) {
+    document.getElementById('cal-search-results').style.display = 'none';
+    document.getElementById('cal-grid-wrap').style.display = 'none';
+    detalleEl.style.display = 'none';
+    renderAnio();
+  } else {
+    document.getElementById('cal-anio-wrap').style.display = 'none';
+    document.getElementById('cal-grid-wrap').style.display = '';
+    renderGrid();
+    if (diaSeleccionado) renderDetalle(diaSeleccionado);
+  }
+});
+
+let searchTimer;
+document.getElementById('buscar-evento').addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  busqueda = e.target.value.trim();
+  if (!busqueda) {
+    vistaAnio = false;
+    document.getElementById('cal-search-results').style.display = 'none';
+    document.getElementById('cal-grid-wrap').style.display = '';
+    renderGrid();
+    if (diaSeleccionado) renderDetalle(diaSeleccionado);
+    return;
+  }
+  searchTimer = setTimeout(renderBusqueda, 250);
+});
+
+// Manejo de params de URL (integración inversa desde alquileres/plantillas)
+(function handleUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  const fecha  = params.get('fecha');
+  const titulo = params.get('titulo');
+  const tipo   = params.get('tipo') || 'evento';
+  if (fecha && titulo) {
+    const d = new Date(fecha + 'T12:00:00');
+    mesActual  = d.getMonth();
+    anioActual = d.getFullYear();
+    diaSeleccionado = fecha;
+    // Abrir modal pre-cargado después de cargar
+    setTimeout(() => abrirModal({ fecha, titulo, tipo }), 300);
+  } else {
+    diaSeleccionado = new Date().toISOString().split('T')[0];
+  }
+})();
+
+cargar().then(() => verificarRecordatoriosHoy());

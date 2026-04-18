@@ -197,12 +197,17 @@ window.abrirDetalle = (id) => {
       ${a.notas ? `<div style="grid-column:1/-1"><div style="color:var(--text-3);font-size:11px;margin-bottom:2px">NOTAS</div><span style="color:var(--text-2)">${a.notas}</span></div>` : ''}
     </div>`;
 
+  const calLink = a.fecha_fin_prevista
+    ? `<a href="calendario.html?fecha=${a.fecha_fin_prevista}&titulo=${encodeURIComponent('Vence alquiler: ' + a.cliente_nombre)}&tipo=evento" class="btn btn-ghost btn-sm" style="text-decoration:none">📅 Cal.</a>`
+    : '';
   actions.innerHTML = a.estado !== 'devuelto'
     ? `<button class="btn btn-primary btn-full" onclick="window.marcarDevuelto('${a.id}');document.getElementById('modal-detalle-alq').classList.add('hidden')">✅ Marcar como devuelto</button>
        ${waLink ? `<a href="${waLink}" target="_blank" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">📲 WhatsApp</a>` : ''}
+       ${calLink}
        <button class="btn btn-secondary" onclick="window.abrirEditarAlq('${a.id}')">✏️ Editar</button>
        <button class="btn btn-danger" onclick="window.borrarAlquiler('${a.id}');document.getElementById('modal-detalle-alq').classList.add('hidden')">🗑 Borrar</button>`
     : `${waLink ? `<a href="${waLink}" target="_blank" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">📲 WhatsApp</a>` : ''}
+       ${calLink}
        <button class="btn btn-secondary" onclick="window.abrirEditarAlq('${a.id}')">✏️ Editar</button>
        <button class="btn btn-danger" onclick="window.borrarAlquiler('${a.id}');document.getElementById('modal-detalle-alq').classList.add('hidden')">🗑 Borrar alquiler</button>`;
 

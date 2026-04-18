@@ -121,6 +121,11 @@ async function cargarSidebarBadges() {
         .in('estado', ['activo','vencido']).lt('fecha_fin_prevista', hoyDate.toISOString().split('T')[0]);
       if (alqVenc && alqVenc.length > 0) setBadge('alquileres.html', alqVenc.length, 'red');
     } catch {}
+
+    try {
+      const { count: calHoy } = await supabase.from('calendario').select('id', { count: 'exact', head: true }).eq('fecha', hoy);
+      if (calHoy > 0) setBadge('calendario.html', calHoy, 'brand');
+    } catch {}
   } catch {}
 }
 

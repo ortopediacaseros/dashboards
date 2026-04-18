@@ -83,6 +83,20 @@
     .cal-detalle-sub { font-size:11px; color:var(--text-3); margin-top:2px; }
     .cal-detalle-actions { margin-left:auto; display:flex; gap:6px; align-items:center; }
 
+    /* ── Vista anual ── */
+    .anio-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; }
+    .anio-mes { border:1px solid var(--border); border-radius:10px; padding:10px; }
+    .anio-mes-titulo { font-size:12px; font-weight:700; color:var(--text); margin-bottom:6px; text-align:center; cursor:pointer; }
+    .anio-mes-titulo:hover { color:var(--brand); }
+    .anio-mini-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; }
+    .anio-mini-cell { aspect-ratio:1; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:9px; color:var(--text-3); position:relative; cursor:pointer; }
+    .anio-mini-cell:hover { background:var(--surface-2); }
+    .anio-mini-cell.hoy { background:var(--brand); color:white; border-radius:50%; }
+    .anio-mini-cell.feriado { background:rgba(245,158,11,0.15); color:var(--amber); }
+    .anio-mini-cell.con-evento { font-weight:700; color:var(--brand); }
+    .anio-mini-cell.otro-mes { opacity:.2; cursor:default; }
+    .anio-mini-cell.fin-sem { color:var(--red); opacity:.65; }
+    .anio-mini-head { font-size:8px; font-weight:700; text-align:center; color:var(--text-3); }
     /* ── Exportar ── */
     .filter-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
   </style>
@@ -121,6 +135,7 @@
               <button class="cal-nav-btn" id="btn-hoy-nav" style="font-size:11px;padding:4px 10px">Hoy</button>
             </div>
             <div class="filter-row">
+              <input type="search" class="input" id="buscar-evento" placeholder="🔍 Buscar evento…" style="min-width:170px;font-size:12px">
               <select class="select" id="filtro-tipo" style="min-width:140px;font-size:12px">
                 <option value="">Todos los tipos</option>
                 <option value="evento">Evento</option>
@@ -130,6 +145,7 @@
                 <option value="reunion">Reunión</option>
                 <option value="otro">Otro</option>
               </select>
+              <button class="cal-nav-btn" id="btn-vista-anio" style="font-size:11px;padding:4px 10px">📆 Año</button>
             </div>
           </div>
 
@@ -156,6 +172,12 @@
             <div class="cal-leyenda-item"><span class="cal-dot cal-dot-venta"></span>Ventas registradas</div>
             <div class="cal-leyenda-item"><span style="display:inline-block;width:12px;height:12px;border:1.5px dashed var(--brand);border-radius:3px;vertical-align:middle"></span>&nbsp;Próximos 7 días</div>
           </div>
+
+          <!-- Resultados de búsqueda -->
+          <div id="cal-search-results" style="display:none;padding:0 16px 16px"></div>
+
+          <!-- Vista anual -->
+          <div id="cal-anio-wrap" style="display:none;padding:0 16px 16px"></div>
 
           <!-- Detalle del día seleccionado -->
           <div class="cal-detalle" id="cal-detalle" style="display:none"></div>
@@ -197,6 +219,17 @@
               <option value="pago">Pago</option>
               <option value="reunion">Reunión</option>
               <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="label">Recordatorio</label>
+            <select class="select" id="ev-recordatorio">
+              <option value="">Sin recordatorio</option>
+              <option value="0">El mismo día (9 am)</option>
+              <option value="1">1 día antes</option>
+              <option value="2">2 días antes</option>
+              <option value="3">3 días antes</option>
+              <option value="7">1 semana antes</option>
             </select>
           </div>
           <div class="form-row">
