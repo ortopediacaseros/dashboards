@@ -95,18 +95,36 @@ async function cargarReporteDiario() {
 
   const { dayStart, dayEnd } = dayBounds(fecha);
 
-  // Fetch ventas with items and products
-  const { data: ventas, error } = await supabase
-    .from('ventas')
-    .select('*, items_venta(*, productos(*))')
-    .gte('fecha', dayStart)
-    .lte('fecha', dayEnd);
+  const [
+    { data: ventas, error },
+    { data: alqsDev },
+    { data: pltsDev },
+  ] = await Promise.all([
+    supabase.from('ventas').select('*, items_venta(*, productos(*))')
+      .gte('fecha', dayStart).lte('fecha', dayEnd),
+    supabase.from('alquileres')
+      .select('id,precio_por_dia,fecha_inicio,fecha_devolucion,cliente_nombre')
+      .eq('fecha_devolucion', fecha).eq('estado', 'devuelto'),
+    supabase.from('pedidos_plantillas')
+      .select('id,precio,cliente_nombre')
+      .eq('fecha_entrega_real', fecha).eq('estado', 'entregado'),
+  ]);
 
   if (error) { showToast('Error al cargar reporte diario', 'error'); return; }
 
   const rows = ventas || [];
 
-  // KPIs
+  // Ingresos de servicios
+  const ingAlq = (alqsDev || []).reduce((s, a) => {
+    const dias = a.fecha_devolucion && a.fecha_inicio
+      ? Math.max(1, Math.ceil((new Date(a.fecha_devolucion) - new Date(a.fecha_inicio)) / 86400000))
+      : 1;
+    return s + Number(a.precio_por_dia || 0) * dias;
+  }, 0);
+  const ingPlt = (pltsDev || []).reduce((s, p) => s + Number(p.precio || 0), 0);
+  const ingServicios = ingAlq + ingPlt;
+
+  // KPIs ventas
   const tickets   = rows.length;
   const totalFac  = rows.reduce((s, v) => s + Number(v.total || 0), 0);
   let   costoTotal = 0;
@@ -119,8 +137,9 @@ async function cargarReporteDiario() {
     pagoBrk[mp] = (pagoBrk[mp] || 0) + Number(v.total || 0);
 
     (v.items_venta || []).forEach(it => {
-      const costo = Number(it.productos?.precio_costo || 0) * Number(it.cantidad || 1);
-      costoTotal += costo;
+      // IVA 21% sobre el costo de compra para margen real
+      const costoConIva = Number(it.productos?.precio_costo || 0) * 1.21 * Number(it.cantidad || 1);
+      costoTotal += costoConIva;
 
       const pid  = it.producto_id;
       const nom  = it.productos?.nombre || `#${pid}`;
@@ -130,14 +149,18 @@ async function cargarReporteDiario() {
     });
   });
 
-  const gananciaBruta = totalFac - costoTotal;
-  const margen        = totalFac > 0 ? (gananciaBruta / totalFac) * 100 : 0;
+  const totalGeneral  = totalFac + ingServicios;
+  const gananciaBruta = totalGeneral - costoTotal;
+  const margen        = totalGeneral > 0 ? (gananciaBruta / totalGeneral) * 100 : 0;
 
   if (kpisDiario) {
     kpisDiario.innerHTML =
       kpiCard('Tickets', tickets) +
-      kpiCard('Total facturado', formatMoney(totalFac), 'var(--teal)') +
-      kpiCard('Costo total', formatMoney(costoTotal), 'var(--red)') +
+      kpiCard('Ventas', formatMoney(totalFac), 'var(--teal)') +
+      kpiCard('Alquileres', formatMoney(ingAlq), 'var(--blue, #2563EB)') +
+      kpiCard('Plantillas', formatMoney(ingPlt), 'var(--green)') +
+      kpiCard('Total general', formatMoney(totalGeneral), 'var(--brand, #1B4FD8)') +
+      kpiCard('Costo c/IVA', formatMoney(costoTotal), 'var(--red)') +
       kpiCard('Ganancia bruta', formatMoney(gananciaBruta), gananciaBruta >= 0 ? 'var(--green)' : 'var(--red)') +
       kpiCard('Margen', margen.toFixed(1) + '%', 'var(--yellow)');
   }
@@ -213,19 +236,57 @@ async function cargarReporteMensual() {
   const inicio   = `${año}-${mesStr}-01T00:00:00`;
   const fin      = `${año}-${mesStr}-${String(diasMes).padStart(2, '0')}T23:59:59`;
 
-  const { data: ventas, error } = await supabase
-    .from('ventas')
-    .select('*, items_venta(*, productos(*))')
-    .gte('fecha', inicio)
-    .lte('fecha', fin);
+  const mesDateStr = String(mes).padStart(2, '0');
+  const inicioFecha = `${año}-${mesDateStr}-01`;
+  const finFecha    = `${año}-${mesDateStr}-${String(diasMes).padStart(2, '0')}`;
+
+  const [
+    { data: ventas, error },
+    { data: alqsMes },
+    { data: pltsMes },
+  ] = await Promise.all([
+    supabase.from('ventas').select('*, items_venta(*, productos(*))')
+      .gte('fecha', inicio).lte('fecha', fin),
+    supabase.from('alquileres')
+      .select('id,precio_por_dia,fecha_inicio,fecha_devolucion,cliente_nombre')
+      .eq('estado', 'devuelto')
+      .gte('fecha_devolucion', inicioFecha).lte('fecha_devolucion', finFecha),
+    supabase.from('pedidos_plantillas')
+      .select('id,precio,cliente_nombre,fecha_entrega_real')
+      .eq('estado', 'entregado')
+      .gte('fecha_entrega_real', inicioFecha).lte('fecha_entrega_real', finFecha),
+  ]);
 
   if (error) { showToast('Error al cargar reporte mensual', 'error'); return; }
 
   const rows = ventas || [];
 
+  // Ingresos de servicios del mes
+  const ingAlqMes = (alqsMes || []).reduce((s, a) => {
+    const dias = a.fecha_devolucion && a.fecha_inicio
+      ? Math.max(1, Math.ceil((new Date(a.fecha_devolucion) - new Date(a.fecha_inicio)) / 86400000))
+      : 1;
+    return s + Number(a.precio_por_dia || 0) * dias;
+  }, 0);
+  const ingPltMes = (pltsMes || []).reduce((s, p) => s + Number(p.precio || 0), 0);
+  const ingServMes = ingAlqMes + ingPltMes;
+
   // Aggregate per day
   const porDia = {};
-  for (let d = 1; d <= diasMes; d++) porDia[d] = { total: 0, costo: 0, tickets: 0 };
+  for (let d = 1; d <= diasMes; d++) porDia[d] = { total: 0, costo: 0, tickets: 0, servicios: 0 };
+
+  // Agregar servicios por día
+  (alqsMes || []).forEach(a => {
+    const d = new Date(a.fecha_devolucion + 'T12:00:00').getDate();
+    if (porDia[d]) {
+      const dias = Math.max(1, Math.ceil((new Date(a.fecha_devolucion) - new Date(a.fecha_inicio)) / 86400000));
+      porDia[d].servicios += Number(a.precio_por_dia || 0) * dias;
+    }
+  });
+  (pltsMes || []).forEach(p => {
+    const d = new Date(p.fecha_entrega_real + 'T12:00:00').getDate();
+    if (porDia[d]) porDia[d].servicios += Number(p.precio || 0);
+  });
 
   const catMap = {};
 
@@ -235,44 +296,56 @@ async function cargarReporteMensual() {
     porDia[d].tickets += 1;
 
     (v.items_venta || []).forEach(it => {
-      const costo = Number(it.productos?.precio_costo || 0) * Number(it.cantidad || 1);
-      porDia[d].costo += costo;
+      const costoConIva = Number(it.productos?.precio_costo || 0) * 1.21 * Number(it.cantidad || 1);
+      porDia[d].costo += costoConIva;
 
       const cat = it.productos?.categoria || 'Sin categoría';
       if (!catMap[cat]) catMap[cat] = { ventas: 0, costo: 0 };
       catMap[cat].ventas += Number(it.subtotal || 0);
-      catMap[cat].costo  += costo;
+      catMap[cat].costo  += costoConIva;
     });
   });
 
   const totalVentas   = rows.reduce((s, v) => s + Number(v.total || 0), 0);
+  const totalGeneral  = totalVentas + ingServMes;
   let   costoTotal    = 0;
   rows.forEach(v => (v.items_venta || []).forEach(it => {
-    costoTotal += Number(it.productos?.precio_costo || 0) * Number(it.cantidad || 1);
+    costoTotal += Number(it.productos?.precio_costo || 0) * 1.21 * Number(it.cantidad || 1);
   }));
 
-  const gananciaNeta  = totalVentas - costoTotal;
+  const gananciaNeta  = totalGeneral - costoTotal;
   const tickets       = rows.length;
-  const margenProm    = totalVentas > 0 ? (gananciaNeta / totalVentas) * 100 : 0;
+  const margenProm    = totalGeneral > 0 ? (gananciaNeta / totalGeneral) * 100 : 0;
 
   if (kpisMensual) {
     kpisMensual.innerHTML =
-      kpiCard('Total ventas', formatMoney(totalVentas), 'var(--teal)') +
-      kpiCard('Ganancia neta', formatMoney(gananciaNeta), gananciaNeta >= 0 ? 'var(--green)' : 'var(--red)') +
+      kpiCard('Ventas', formatMoney(totalVentas), 'var(--teal)') +
+      kpiCard('Alquileres', formatMoney(ingAlqMes), 'var(--blue, #2563EB)') +
+      kpiCard('Plantillas', formatMoney(ingPltMes), 'var(--green)') +
+      kpiCard('Total general', formatMoney(totalGeneral), 'var(--brand, #1B4FD8)') +
+      kpiCard('Costo c/IVA', formatMoney(costoTotal), 'var(--red)') +
+      kpiCard('Ganancia total', formatMoney(gananciaNeta), gananciaNeta >= 0 ? 'var(--green)' : 'var(--red)') +
       kpiCard('Tickets', tickets) +
       kpiCard('Margen promedio', margenProm.toFixed(1) + '%', 'var(--yellow)');
   }
 
-  // CSS Bar chart
+  // CSS Bar chart (ventas + servicios apilados)
   if (barChart) {
-    const maxVal = Math.max(...Object.values(porDia).map(d => d.total), 1);
+    const maxVal = Math.max(...Object.values(porDia).map(d => d.total + d.servicios), 1);
     barChart.innerHTML = `
       <div class="bar-chart-wrap">
         ${Object.entries(porDia).map(([day, d]) => {
-          const h = Math.round((d.total / maxVal) * 100);
+          const totalDia = d.total + d.servicios;
+          const h  = Math.round((totalDia / maxVal) * 100);
+          const hs = Math.round((d.servicios / maxVal) * 100);
+          const hv = h - hs;
+          const tip = `Día ${day}: ${formatMoney(totalDia)}${d.servicios > 0 ? ` (servicios ${formatMoney(d.servicios)})` : ''}`;
           return `
-            <div class="bar-col" title="Día ${day}: ${formatMoney(d.total)}">
-              <div class="bar-fill" style="height:${h}%"></div>
+            <div class="bar-col" title="${tip}">
+              <div style="height:${h}%;display:flex;flex-direction:column;justify-content:flex-end;width:100%">
+                ${hs > 0 ? `<div class="bar-fill" style="height:${(hs/h*100).toFixed(1)}%;background:var(--green,#10b981);opacity:.85"></div>` : ''}
+                <div class="bar-fill" style="height:${(hv/h*100).toFixed(1)}%"></div>
+              </div>
               <div class="bar-label">${day}</div>
             </div>`;
         }).join('')}
@@ -313,19 +386,31 @@ async function cargarReporteMensual() {
     const inicioP  = `${añoPrev}-${mesPS}-01T00:00:00`;
     const finP     = `${añoPrev}-${mesPS}-${String(diasMP).padStart(2, '0')}T23:59:59`;
 
-    const { data: ventasPrev } = await supabase
-      .from('ventas')
-      .select('total, items_venta(cantidad, precio_unitario, productos(precio_costo))')
-      .gte('fecha', inicioP)
-      .lte('fecha', finP);
+    const inicioFechaP = `${añoPrev}-${mesPS}-01`;
+    const finFechaP    = `${añoPrev}-${mesPS}-${String(diasMP).padStart(2,'0')}`;
+
+    const [{ data: ventasPrev }, { data: alqsPrev }, { data: pltsPrev }] = await Promise.all([
+      supabase.from('ventas').select('total, items_venta(cantidad, precio_unitario, productos(precio_costo))')
+        .gte('fecha', inicioP).lte('fecha', finP),
+      supabase.from('alquileres').select('precio_por_dia,fecha_inicio,fecha_devolucion')
+        .eq('estado','devuelto').gte('fecha_devolucion', inicioFechaP).lte('fecha_devolucion', finFechaP),
+      supabase.from('pedidos_plantillas').select('precio')
+        .eq('estado','entregado').gte('fecha_entrega_real', inicioFechaP).lte('fecha_entrega_real', finFechaP),
+    ]);
 
     const prevRows        = ventasPrev || [];
     const prevVentas      = prevRows.reduce((s, v) => s + Number(v.total || 0), 0);
+    const prevServAlq     = (alqsPrev||[]).reduce((s,a) => {
+      const dias = Math.max(1, Math.ceil((new Date(a.fecha_devolucion)-new Date(a.fecha_inicio))/86400000));
+      return s + Number(a.precio_por_dia||0)*dias;
+    }, 0);
+    const prevServPlt     = (pltsPrev||[]).reduce((s,p) => s + Number(p.precio||0), 0);
+    const prevTotal       = prevVentas + prevServAlq + prevServPlt;
     let   prevCosto       = 0;
     prevRows.forEach(v => (v.items_venta || []).forEach(it => {
-      prevCosto += Number(it.productos?.precio_costo || 0) * Number(it.cantidad || 1);
+      prevCosto += Number(it.productos?.precio_costo || 0) * 1.21 * Number(it.cantidad || 1);
     }));
-    const prevGanancia    = prevVentas - prevCosto;
+    const prevGanancia    = prevTotal - prevCosto;
     const prevTickets     = prevRows.length;
     const mesNombre       = new Date(año, mes - 1, 1).toLocaleDateString('es-AR', { month: 'long' });
     const mesNombreP      = new Date(añoPrev, mesPrev - 1, 1).toLocaleDateString('es-AR', { month: 'long' });
@@ -336,10 +421,10 @@ async function cargarReporteMensual() {
       </div>
       <div class="comparativa-grid">
         <div class="comp-item">
-          <span class="comp-label">Ventas</span>
-          <span class="comp-curr">${formatMoney(totalVentas)}</span>
-          <span class="comp-prev text-muted">${formatMoney(prevVentas)}</span>
-          ${deltaPct(totalVentas, prevVentas)}
+          <span class="comp-label">Total (vtas+srv)</span>
+          <span class="comp-curr">${formatMoney(totalGeneral)}</span>
+          <span class="comp-prev text-muted">${formatMoney(prevTotal)}</span>
+          ${deltaPct(totalGeneral, prevTotal)}
         </div>
         <div class="comp-item">
           <span class="comp-label">Ganancia</span>
@@ -407,12 +492,13 @@ function exportarCSV() {
 
   const { porDia, mes, año } = d;
   const mesStr = String(mes).padStart(2, '0');
-  const lines  = ['Día,Fecha,Ventas,Costo,Ganancia,Tickets'];
+  const lines  = ['Día,Fecha,Ventas,Servicios,Total,Costo c/IVA,Ganancia,Tickets'];
 
   Object.entries(porDia).forEach(([day, data]) => {
     const fecha     = `${año}-${mesStr}-${String(day).padStart(2, '0')}`;
-    const ganancia  = data.total - data.costo;
-    lines.push(`${day},${fecha},${data.total.toFixed(2)},${data.costo.toFixed(2)},${ganancia.toFixed(2)},${data.tickets}`);
+    const total     = data.total + (data.servicios || 0);
+    const ganancia  = total - data.costo;
+    lines.push(`${day},${fecha},${data.total.toFixed(2)},${(data.servicios||0).toFixed(2)},${total.toFixed(2)},${data.costo.toFixed(2)},${ganancia.toFixed(2)},${data.tickets}`);
   });
 
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
